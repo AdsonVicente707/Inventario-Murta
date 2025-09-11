@@ -235,8 +235,16 @@
                                 </form>
                             </div>
                         {% else %}
-                            <!-- Para usuários comuns, a ação é selecionar o item na primeira coluna -->
-                            <span class="text-muted fst-italic">Selecione para requisitar</span>
+                            {# Lógica para usuários comuns #}
+                            {% if item.availability_status == 'Disponível' %}
+                                <!-- Botão de requisição individual que também abre o modal -->
+                                <button type="button" class="btn btn-futuristic-add btn-sm request-single-item-btn" data-item-id="{{ item.id }}" data-bs-toggle="modal" data-bs-target="#batchRequestModal">
+                                    <i class="bi bi-send"></i> Requisitar
+                                </button>
+                            {% else %}
+                                <!-- Mostra o status se não estiver disponível -->
+                                <span class="badge bg-secondary">{{ item.availability_status }}</span>
+                            {% endif %}
                         {% endif %}
                     </td>
                 </tr>
@@ -304,6 +312,7 @@
         const itemCheckboxes = document.querySelectorAll('.item-checkbox');
         const batchRequestBtn = document.getElementById('batch-request-btn');
         const selectedCountSpan = document.getElementById('selected-count');
+        const requestForm = document.getElementById('request-form');
 
         function toggleRequestButton() {
             const checkedCount = document.querySelectorAll('.item-checkbox:checked').length;
@@ -323,6 +332,20 @@
         }
 
         itemCheckboxes.forEach(checkbox => checkbox.addEventListener('change', toggleRequestButton));
+
+        // Adiciona lógica para os botões de requisição individual
+        document.querySelectorAll('.request-single-item-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const itemId = this.getAttribute('data-item-id');
+                
+                // Desmarca todos os outros checkboxes para garantir que apenas este item seja enviado
+                itemCheckboxes.forEach(cb => {
+                    cb.checked = (cb.value === itemId);
+                });
+
+                toggleRequestButton(); // Atualiza a contagem no modal
+            });
+        });
     });
     </script>
     {% endif %}
