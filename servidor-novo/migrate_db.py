@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from werkzeug.security import generate_password_hash
 
 # --- Define o caminho absoluto para o banco de dados ---
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -29,6 +30,41 @@ def add_column_if_not_exists(db_path, table_name, column_name, column_type):
     finally:
         if conn:
             conn.close()
+ 
+def create_or_update_default_admin(db_path):
+    """Cria ou atualiza o usuário administrador padrão para garantir que ele exista e tenha os dados corretos."""
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Verifica se o usuário 'admin' já existe
+        cursor.execute("SELECT id FROM users WHERE username = 'admin'")
+        admin_user = cursor.fetchone()
+ 
+        # Criptografa a senha padrão
+        hashed_password = generate_password_hash('admin123')
+ 
+        if admin_user is None:
+            print("Usuário 'admin' padrão não encontrado. Criando...")
+            cursor.execute(
+                "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                ('admin', hashed_password, 'admin')
+            )
+            print("Usuário 'admin' criado com sucesso com a senha 'admin123'.")
+        else:
+            print("Usuário 'admin' padrão encontrado. Atualizando senha e papel para garantir o acesso...")
+            cursor.execute(
+                "UPDATE users SET password = ?, role = ? WHERE username = ?",
+                (hashed_password, 'admin', 'admin')
+            )
+            print("Usuário 'admin' atualizado com sucesso.")
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Ocorreu um erro no banco de dados ao criar o admin padrão: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == '__main__':
     print("Iniciando a verificação e migração do banco de dados...")
@@ -40,5 +76,8 @@ if __name__ == '__main__':
         add_column_if_not_exists(DATABASE_PATH, 'items', 'model', 'TEXT')
         add_column_if_not_exists(DATABASE_PATH, 'items', 'availability_status', 'TEXT')
         add_column_if_not_exists(DATABASE_PATH, 'users', 'role', "TEXT NOT NULL DEFAULT 'user'")
-
+        
+        # Garante que o usuário admin padrão exista
+        create_or_update_default_admin(DATABASE_PATH)
+ 
     print("\nVerificação concluída. Seu banco de dados está atualizado!")

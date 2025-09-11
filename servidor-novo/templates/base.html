@@ -15,11 +15,22 @@
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('dashboard') }}">Inventário do Escritório</a>
             <div class="navbar-nav d-flex">
+            <div class="navbar-nav d-flex align-items-center">
                 {% if g.user %}
                     <span class="navbar-text me-3">
                         Olá, {{ g.user['username'] }}
                     </span>
                     <a class="nav-link" href="{{ url_for('logout') }}">Sair</a>
+                    <div class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarUserDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle me-1"></i> Olá, {{ g.user['username'] }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Alterar Senha</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">Sair</a></li>
+                        </ul>
+                    </div>
                 {% else %}
                     <a class="nav-link" href="{{ url_for('login') }}">Login</a>
                     <a class="nav-link" href="{{ url_for('register') }}">Registrar</a>
@@ -53,6 +64,10 @@
                     </div>
 
                     {% if g.user.role == 'admin' %}
+                        <a href="{{ url_for('manage_users') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'manage_users' %}active{% endif %}">
+                            <i class="bi bi-people me-2"></i>Gerenciar Usuários
+                        </a>
+
                         <a href="{{ url_for('manage_categories') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'manage_categories' %}active{% endif %}">
                             <i class="bi bi-tags me-2"></i>Gerenciar Categorias
                         </a>

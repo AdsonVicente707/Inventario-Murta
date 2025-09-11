@@ -92,6 +92,17 @@ def login_required(view):
         return view(**kwargs)
     return wrapped_view
 
+def admin_required(view):
+    """Decorator que garante que o usuário está logado e é um administrador."""
+    @functools.wraps(view)
+    def wrapped_view(**kwargs):
+        if g.user is None:
+            return redirect(url_for('login'))
+        if g.user['role'] != 'admin':
+            abort(403) # Erro 'Forbidden' (Proibido)
+        return view(**kwargs)
+    return wrapped_view
+
 def log_activity(db, action, item_id=None, item_name=None):
     """Registra uma ação no log de atividades."""
     if g.user:
@@ -201,7 +212,7 @@ def dashboard():
                            monthly_labels=monthly_labels, monthly_data=monthly_data)
 
 @app.route('/categories', methods=('GET', 'POST'))
-@login_required
+@admin_required
 def manage_categories():
     """Página para gerenciar (renomear e remover) categorias."""
     db = get_db()
@@ -246,6 +257,45 @@ def manage_categories():
     categories = db.execute('SELECT DISTINCT category FROM items WHERE category IS NOT NULL AND category != "" ORDER BY category').fetchall()
     return render_template('manage_categories.html', categories=categories)
 
+@app.route('/manage_users', methods=('GET', 'POST'))
+@admin_required
+def manage_users():
+    """Página para administradores gerenciarem os papéis dos usuários."""
+    db = get_db()
+
+    if request.method == 'POST':
+        user_id = request.form.get('user_id')
+        new_role = request.form.get('role')
+
+        # Validação para garantir que os dados recebidos são válidos
+        if not user_id or new_role not in ['admin', 'user']:
+            flash('Requisição inválida.', 'danger')
+            return redirect(url_for('manage_users'))
+
+        # Prevenir que o admin altere o próprio papel para evitar auto-bloqueio
+        if int(user_id) == g.user['id']:
+            flash('Você não pode alterar seu próprio papel.', 'warning')
+            return redirect(url_for('manage_users'))
+
+        try:
+            target_user = db.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+            if target_user:
+                db.execute('UPDATE users SET role = ? WHERE id = ?', (new_role, user_id))
+                log_activity(db, f"Alterou o papel do usuário '{target_user['username']}' para '{new_role}'")
+                db.commit()
+                flash(f"Papel do usuário '{target_user['username']}' atualizado para '{new_role}'.", 'success')
+            else:
+                flash('Usuário não encontrado.', 'danger')
+        except sqlite3.Error as e:
+            db.rollback()
+            flash(f'Erro ao atualizar o papel do usuário: {e}', 'danger')
+        
+        return redirect(url_for('manage_users'))
+
+    # Busca todos os usuários para exibir na página
+    users = db.execute('SELECT id, username, role FROM users ORDER BY username').fetchall()
+    return render_template('manage_users.html', users=users)
+
 @app.route('/')
 @login_required
 def index():
@@ -284,7 +334,7 @@ def index():
     return render_template('index.html', items=items, page=page, total_pages=total_pages)
 
 @app.route('/avarias')
-@login_required
+@admin_required
 def broken_items():
     """Página que lista todos os itens com status 'Quebrado'."""
     search_query = request.args.get('q', '')
@@ -497,7 +547,7 @@ def delete(id):
     return redirect(url_for('index'))
 
 @app.route('/logs')
-@login_required
+@admin_required
 def logs():
     """Exibe o log de atividades com paginação."""
     page = request.args.get('page', 1, type=int)
