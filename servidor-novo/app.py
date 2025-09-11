@@ -70,7 +70,15 @@ def inject_categories():
         # Pega categorias distintas que não sejam nulas ou vazias
         categories = db.execute('SELECT DISTINCT category FROM items WHERE category IS NOT NULL AND category != "" ORDER BY category').fetchall()
         return dict(all_categories=categories)
-    return dict(all_categories=[])
+    return dict(all_categories=[], notifications=[])
+
+@app.context_processor
+def inject_notifications():
+    if g.user:
+        db = get_db()
+        notifications = db.execute('SELECT * FROM notifications WHERE user_id = ? AND is_read = 0 ORDER BY created_at DESC', (g.user['id'],)).fetchall()
+        return dict(notifications=notifications)
+    return dict(notifications=[])
 
 @app.before_request
 def load_logged_in_user():
@@ -367,6 +375,140 @@ def broken_items():
     # Reutiliza o template index.html, passando um título e endpoint específicos
     return render_template('index.html', items=items, page=page, total_pages=total_pages, title='Itens com Avaria', endpoint='broken_items')
 
+@app.route('/request_item/<int:item_id>', methods=('POST',))
+@login_required
+def request_item(item_id):
+    """Registra a requisição de um item por um usuário."""
+    db = get_db()
+    item = get_item(item_id)
+
+    if item['availability_status'] != 'Disponível':
+        flash('Este item não está disponível para requisição.', 'warning')
+        return redirect(url_for('index'))
+    
+    notes = request.form.get('notes', '').strip()
+    try:
+        db.execute(
+            'INSERT INTO item_requests (item_id, user_id, status, notes) VALUES (?, ?, ?, ?)',
+            (item_id, g.user['id'], 'Pendente', notes)
+        )
+        db.commit()
+        flash(f'Sua requisição para o item "{item["name"]}" foi enviada para aprovação.', 'success')
+    except sqlite3.Error as e:
+        db.rollback()
+        flash(f'Ocorreu um erro ao processar sua requisição: {e}', 'danger')
+
+    return redirect(url_for('index'))
+
+@app.route('/manage_requests', methods=('GET', 'POST'))
+@admin_required
+def manage_requests():
+    """Página para administradores gerenciarem as requisições de itens."""
+    db = get_db()
+
+    if request.method == 'POST':
+        request_id = request.form.get('request_id')
+        action = request.form.get('action') # 'approve' ou 'deny'
+
+        req_data = db.execute('SELECT * FROM item_requests WHERE id = ?', (request_id,)).fetchone()
+        if not req_data:
+            abort(404)
+
+        # Correção: Estas linhas devem estar fora do bloco 'if not req_data'
+        requester_id = req_data['user_id']
+        item = get_item(req_data['item_id'])
+
+        if action == 'approve':
+            requester = db.execute('SELECT username FROM users WHERE id = ?', (req_data['user_id'],)).fetchone()
+            # Atualiza o status da requisição
+            db.execute("UPDATE item_requests SET status = 'Aprovado' WHERE id = ?", (request_id,))
+            # Atualiza o item, atribuindo-o ao usuário
+            db.execute(
+                "UPDATE items SET availability_status = 'Em uso', assigned_to = ? WHERE id = ?",
+                (requester['username'], req_data['item_id'])
+            )
+            # Correção: Indentação correta para criar a notificação
+            notification_message = f"Sua requisição para '{item['name']}' foi Aprovada."
+            db.execute("INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)", (requester_id, notification_message, url_for('my_requests')))
+            log_activity(db, f"Aprovou requisição para '{item['name']}' para o usuário '{requester['username']}'")
+            flash(f"Requisição para '{item['name']}' aprovada.", 'success')
+        elif action == 'deny':
+            db.execute("UPDATE item_requests SET status = 'Recusado' WHERE id = ?", (request_id,))
+            # Correção: Indentação correta para criar a notificação
+            notification_message = f"Sua requisição para '{item['name']}' foi Recusada."
+            db.execute("INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)", (requester_id, notification_message, url_for('my_requests')))
+            flash("Requisição recusada.", 'info')
+        
+        db.commit()
+        return redirect(url_for('manage_requests'))
+
+    requests_list = db.execute("""
+        SELECT r.id, r.request_date, r.status, r.notes, i.name as item_name, u.username as user_name
+        FROM item_requests r JOIN items i ON r.item_id = i.id JOIN users u ON r.user_id = u.id
+        ORDER BY r.request_date DESC
+    """).fetchall()
+    return render_template('manage_requests.html', requests=requests_list)
+
+@app.route('/request_multiple', methods=['POST'])
+@login_required
+def request_multiple_items():
+    """Registra a requisição de múltiplos itens por um usuário."""
+    db = get_db()
+    item_ids = request.form.getlist('item_ids')
+    notes = request.form.get('notes', '').strip()
+
+    if not item_ids:
+        flash('Nenhum item foi selecionado para requisição.', 'warning')
+        return redirect(url_for('index'))
+
+    requested_count = 0
+    errors = []
+    
+    for item_id in item_ids:
+        item = get_item(item_id) # This already aborts if not found
+        if item['availability_status'] == 'Disponível':
+            try:
+                db.execute(
+                    'INSERT INTO item_requests (item_id, user_id, status, notes) VALUES (?, ?, ?, ?)',
+                    (item_id, g.user['id'], 'Pendente', notes)
+                )
+                requested_count += 1
+            except sqlite3.Error as e:
+                errors.append(f"Erro ao requisitar '{item['name']}': {e}")
+        else:
+            errors.append(f"O item '{item['name']}' não está mais disponível.")
+
+    if requested_count > 0:
+        db.commit()
+        flash(f'{requested_count} item(s) requisitados com sucesso para aprovação.', 'success')
+    for error in errors:
+        flash(error, 'danger')
+
+    return redirect(url_for('index'))
+
+@app.route('/my_requests')
+@login_required
+def my_requests():
+    """Página para o usuário comum ver o status de suas requisições."""
+    db = get_db()
+    requests_list = db.execute("""
+        SELECT r.id, r.request_date, r.status, r.notes, i.name as item_name
+        FROM item_requests r JOIN items i ON r.item_id = i.id
+        WHERE r.user_id = ?
+        ORDER BY r.request_date DESC
+    """, (g.user['id'],)).fetchall()
+    return render_template('my_requests.html', requests=requests_list)
+
+@app.route('/notifications/mark_all_read', methods=['POST'])
+@login_required
+def mark_all_read():
+    """Marca todas as notificações do usuário como lidas."""
+    db = get_db()
+    db.execute('UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0', (g.user['id'],))
+    db.commit()
+    return redirect(request.referrer or url_for('index'))
+
+
 @app.route('/export/csv')
 @login_required
 def export_csv():
@@ -628,6 +770,40 @@ def logout():
     """Faz o logout do usuário."""
     session.clear()
     return redirect(url_for('login'))
+
+@app.route('/change_password', methods=('GET', 'POST'))
+@login_required
+def change_password():
+    """Permite que o usuário logado altere sua própria senha."""
+    if request.method == 'POST':
+        current_password = request.form['current_password']
+        new_password = request.form['new_password']
+        confirm_password = request.form['confirm_password']
+        error = None
+
+        # Verifica a senha atual
+        if not check_password_hash(g.user['password'], current_password):
+            error = 'A senha atual está incorreta.'
+        # Verifica se a nova senha não está vazia
+        elif not new_password:
+            error = 'A nova senha não pode estar em branco.'
+        # Verifica se as novas senhas coincidem
+        elif new_password != confirm_password:
+            error = 'A nova senha e a confirmação não coincidem.'
+
+        if error is None:
+            db = get_db()
+            db.execute(
+                'UPDATE users SET password = ? WHERE id = ?',
+                (generate_password_hash(new_password), g.user['id'])
+            )
+            db.commit()
+            flash('Sua senha foi alterada com sucesso!', 'success')
+            return redirect(url_for('dashboard'))
+        
+        flash(error, 'danger')
+
+    return render_template('change_password.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

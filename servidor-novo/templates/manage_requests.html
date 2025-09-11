@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}Gerenciar Requisições{% endblock %}
+
+{% block content %}
+<div class="bg-light text-dark p-4 rounded shadow-sm">
+    <h1>Gerenciar Requisições de Itens</h1>
+    <p class="text-muted">Aprove ou recuse as requisições de itens feitas pelos usuários.</p>
+    <hr>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Item Requisitado</th>
+                    <th>Usuário</th>
+                    <th>Status</th>
+                    <th>Motivo/Comentário</th>
+                    <th class="text-end">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in requests %}
+                <tr>
+                    <td>{{ req.request_date.split(' ')[0] }}</td>
+                    <td>{{ req.item_name }}</td>
+                    <td>{{ req.user_name }}</td>
+                    <td>
+                        {% set status_map = {
+                            'Pendente': 'warning',
+                            'Aprovado': 'success',
+                            'Recusado': 'danger'
+                        } %}
+                        <span class="badge bg-{{ status_map.get(req.status, 'secondary') }}">{{ req.status }}</span>
+                    </td>
+                    <td>{{ req.notes or 'Nenhum' }}</td>
+                    <td class="text-end">
+                        {% if req.status == 'Pendente' %}
+                            <form method="post" action="{{ url_for('manage_requests') }}" class="d-inline">
+                                <input type="hidden" name="request_id" value="{{ req.id }}">
+                                <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">
+                                    <i class="bi bi-check-lg"></i> Aprovar
+                                </button>
+                                <button type="submit" name="action" value="deny" class="btn btn-danger btn-sm">
+                                    <i class="bi bi-x-lg"></i> Recusar
+                                </button>
+                            </form>
+                        {% else %}
+                            <span class="text-muted fst-italic">Nenhuma ação</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center">Nenhuma requisição encontrada.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

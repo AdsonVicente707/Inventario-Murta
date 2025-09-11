@@ -14,18 +14,43 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('dashboard') }}">Inventário do Escritório</a>
-            <div class="navbar-nav d-flex">
             <div class="navbar-nav d-flex align-items-center">
                 {% if g.user %}
-                    <span class="navbar-text me-3">
-                        Olá, {{ g.user['username'] }}
-                    </span>
-                    <a class="nav-link" href="{{ url_for('logout') }}">Sair</a>
+                    <!-- Dropdown de Notificações -->
+                    <div class="nav-item dropdown me-2">
+                        <a class="nav-link position-relative" href="#" id="navbarNotificationDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-bell fs-5"></i>
+                            {% if notifications and notifications|length > 0 %}
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6em;">
+                                    {{ notifications|length }}
+                                    <span class="visually-hidden">notificações não lidas</span>
+                                </span>
+                            {% endif %}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarNotificationDropdown" style="min-width: 300px;">
+                            <li class="px-3 py-2 fw-bold">Notificações</li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% for notification in notifications %}
+                                <li><a class="dropdown-item small" href="{{ notification.link or '#' }}">{{ notification.message }}</a></li>
+                            {% else %}
+                                <li><p class="dropdown-item-text text-center text-muted small">Nenhuma nova notificação.</p></li>
+                            {% endfor %}
+                            {% if notifications %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form action="{{ url_for('mark_all_read') }}" method="post" class="px-3">
+                                    <button type="submit" class="btn btn-sm btn-link w-100 text-decoration-none">Marcar todas como lidas</button>
+                                </form>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </div>
                     <div class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="navbarUserDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-person-circle me-1"></i> Olá, {{ g.user['username'] }}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('my_requests') }}">Minhas Requisições</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Alterar Senha</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('logout') }}">Sair</a></li>
@@ -70,6 +95,10 @@
 
                         <a href="{{ url_for('manage_categories') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'manage_categories' %}active{% endif %}">
                             <i class="bi bi-tags me-2"></i>Gerenciar Categorias
+                        </a>
+
+                        <a href="{{ url_for('manage_requests') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'manage_requests' %}active{% endif %}">
+                            <i class="bi bi-bell me-2"></i>Gerenciar Requisições
                         </a>
 
                         <a href="{{ url_for('broken_items') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'broken_items' %}active{% endif %}">

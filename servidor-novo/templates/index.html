@@ -152,10 +152,10 @@
                 </div>
             {% else %}
                 <div>
-                    {# Este botão é um placeholder para a funcionalidade de requisição do usuário #}
-                    <a href="#" class="btn btn-futuristic-add">
-                        <i class="bi bi-send"></i> Make a Request
-                    </a>
+                    <!-- Botão para abrir o modal de requisição em lote -->
+                    <button type="button" class="btn btn-futuristic-add" id="batch-request-btn" data-bs-toggle="modal" data-bs-target="#batchRequestModal" disabled>
+                        <i class="bi bi-send-check"></i> Requisitar Selecionados
+                    </button>
                 </div>
             {% endif %}
         </div>
@@ -169,10 +169,13 @@
             </div>
         </form>
 
-        <div class="table-responsive">
-            <table class="table table-futuristic">
+        <!-- O formulário agora envolve a tabela para enviar os checkboxes -->
+        <form method="post" action="{{ url_for('request_multiple_items') }}" id="request-form">
+            <div class="table-responsive">
+                <table class="table table-futuristic">
                 <thead>
                     <tr>
+                    {% if g.user.role != 'admin' %}<th><input type="checkbox" id="select-all-checkbox" title="Selecionar todos"></th>{% endif %}
                     <th>Nome</th>
                     <th>Modelo</th>
                     <th>Categoria</th>
@@ -183,14 +186,17 @@
                     <th>Disponibilidade</th>
                     <th>Atribuído a</th>
                     <th>Autorizado por</th>
-                    {% if g.user.role == 'admin' %}
-                        <th>Ações</th>
-                    {% endif %}
+                    <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                 {% for item in items %}
                 <tr>
+                    {% if g.user.role != 'admin' %}
+                    <td>
+                        {% if item.availability_status == 'Disponível' %}<input type="checkbox" name="item_ids" value="{{ item.id }}" class="item-checkbox">{% endif %}
+                    </td>
+                    {% endif %}
                     <td>{{ item['name'] }}</td>
                     <td>{{ item['model'] or 'N/A' }}</td>
                     <td>{{ item['category'] }}</td>
@@ -211,8 +217,8 @@
                     <td>{{ item['availability_status'] or 'N/A' }}</td>
                     <td>{{ item['assigned_to'] or 'N/A' }}</td>
                     <td>{{ item['authorized_by'] or 'N/A' }}</td>
-                    {% if g.user.role == 'admin' %}
-                        <td>
+                    <td>
+                        {% if g.user.role == 'admin' %}
                             <!-- Grupo de botões com ícones para um visual mais compacto e moderno -->
                             <div class="btn-group" role="group" aria-label="Ações do item">
                                 <a href="{{ url_for('edit', id=item['id']) }}" class="btn btn-sm" title="Editar">
@@ -228,18 +234,44 @@
                                     <button type="submit" class="btn btn-outline-danger btn-sm" title="Excluir" onclick="return confirm('Tem certeza que deseja excluir este item?');"><i class="bi bi-trash"></i></button>
                                 </form>
                             </div>
-                        </td>
-                    {% endif %}
+                        {% else %}
+                            <!-- Para usuários comuns, a ação é selecionar o item na primeira coluna -->
+                            <span class="text-muted fst-italic">Selecione para requisitar</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <!-- Colspan ajustado para o número correto de colunas -->
-                    <td colspan="{% if g.user.role == 'admin' %}11{% else %}10{% endif %}" class="text-center">Nenhum item encontrado.</td>
+                    <td colspan="{% if g.user.role != 'admin' %}12{% else %}11{% endif %}" class="text-center">Nenhum item encontrado.</td>
                 </tr>
                 {% endfor %}
                 </tbody>
-            </table>
-        </div>
+                </table>
+            </div>
+
+            <!-- Modal de Requisição em Lote -->
+            <div class="modal fade" id="batchRequestModal" tabindex="-1" aria-labelledby="batchRequestModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="batchRequestModalLabel">Confirmar Requisição</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Você está prestes a requisitar <strong id="selected-count"></strong> item(ns). Adicione um comentário se necessário.</p>
+                            <div class="mb-3">
+                                <label for="notes" class="form-label">Motivo da Requisição (opcional):</label>
+                                <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="Ex: Para uso no projeto X, substituição de item quebrado, etc."></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Confirmar Requisições</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
     </div>
 
     {% if total_pages > 1 %}
@@ -263,5 +295,35 @@
             </li>
         </ul>
     </nav>
+    {% endif %}
+
+    {% if g.user.role != 'admin' %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
+        const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+        const batchRequestBtn = document.getElementById('batch-request-btn');
+        const selectedCountSpan = document.getElementById('selected-count');
+
+        function toggleRequestButton() {
+            const checkedCount = document.querySelectorAll('.item-checkbox:checked').length;
+            batchRequestBtn.disabled = checkedCount === 0;
+            if (selectedCountSpan) {
+                selectedCountSpan.textContent = checkedCount;
+            }
+        }
+
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', function () {
+                itemCheckboxes.forEach(checkbox => {
+                    checkbox.checked = selectAllCheckbox.checked;
+                });
+                toggleRequestButton();
+            });
+        }
+
+        itemCheckboxes.forEach(checkbox => checkbox.addEventListener('change', toggleRequestButton));
+    });
+    </script>
     {% endif %}
 {% endblock %}

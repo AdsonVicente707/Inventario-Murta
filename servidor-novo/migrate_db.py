@@ -31,6 +31,51 @@ def add_column_if_not_exists(db_path, table_name, column_name, column_type):
         if conn:
             conn.close()
  
+def create_requests_table_if_not_exists(db_path):
+    """Cria a tabela de requisições de itens se ela não existir."""
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        print("Verificando a existência da tabela 'item_requests'...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS item_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                request_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                status TEXT NOT NULL DEFAULT 'Pendente', -- Pendente, Aprovado, Recusado
+                notes TEXT,
+                FOREIGN KEY (item_id) REFERENCES items (id),
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+        print("Tabela 'item_requests' verificada/criada com sucesso.")
+    except sqlite3.Error as e:
+        print(f"Ocorreu um erro no banco de dados ao criar a tabela de requisições: {e}")
+
+def create_notifications_table_if_not_exists(db_path):
+    """Cria a tabela de notificações se ela não existir."""
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        print("Verificando a existência da tabela 'notifications'...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                link TEXT,
+                is_read INTEGER NOT NULL DEFAULT 0, -- 0 para não lida, 1 para lida
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            )
+        """)
+        print("Tabela 'notifications' verificada/criada com sucesso.")
+    except sqlite3.Error as e:
+        print(f"Ocorreu um erro no banco de dados ao criar a tabela de notificações: {e}")
+
 def create_or_update_default_admin(db_path):
     """Cria ou atualiza o usuário administrador padrão para garantir que ele exista e tenha os dados corretos."""
     conn = None
@@ -79,5 +124,11 @@ if __name__ == '__main__':
         
         # Garante que o usuário admin padrão exista
         create_or_update_default_admin(DATABASE_PATH)
+
+        # Garante que a tabela de requisições exista
+        create_requests_table_if_not_exists(DATABASE_PATH)
+
+        # Garante que a tabela de notificações exista
+        create_notifications_table_if_not_exists(DATABASE_PATH)
  
     print("\nVerificação concluída. Seu banco de dados está atualizado!")
