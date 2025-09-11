@@ -1,0 +1,32 @@
+<div class="requests-container" id="pending-requests-section">
+    <h2 class="mb-3" style="color: #c07eff; text-shadow: 0 0 5px #c07eff;">
+        <i class="bi bi-bell-fill"></i> Requisições Pendentes
+    </h2>
+    {% for request in pending_requests %}
+        <div class="request-item">
+            <div class="request-details">
+                <strong>{{ request.item_name }}</strong> requisitado por <strong>{{ request.username }}</strong>
+                <div class="meta">
+                    {{ request.created_at.split('.')[0] }}
+                    {% if request.request_notes %}
+                        | Obs: <em>"{{ request.request_notes|truncate(50) }}"</em>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="request-actions">
+                <form action="{{ url_for('handle_request', request_id=request.id) }}" method="post" class="d-inline">
+                    <input type="hidden" name="action" value="approve">
+                    <button type="submit" class="btn btn-sm btn-approve">
+                        <i class="bi bi-check-circle"></i> Aprovar
+                    </button>
+                </form>
+                <form action="{{ url_for('handle_request', request_id=request.id) }}" method="post" class="d-inline">
+                    <input type="hidden" name="action" value="deny">
+                    <button type="submit" class="btn btn-sm btn-deny">
+                        <i class="bi bi-x-circle"></i> Negar
+                    </button>
+                </form>
+            </div>
+        </div>
+    {% endfor %}
+</div>

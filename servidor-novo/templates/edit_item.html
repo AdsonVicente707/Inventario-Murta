@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar Item{% endblock %}
+
+{% block content %}
+<div class="bg-light text-dark p-4 rounded shadow-sm">
+    <h1>Editar Item: {{ item.name }}</h1>
+    <hr>
+    <form method="post">
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="name" class="form-label">Nome do Item</label>
+                <input type="text" class="form-control" id="name" name="name" value="{{ item.name }}" required>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="model" class="form-label">Modelo</label>
+                <input type="text" class="form-control" id="model" name="model" value="{{ item.model or '' }}" required>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="category" class="form-label">Categoria</label>
+                <input type="text" class="form-control" id="category" name="category" value="{{ item.category }}" required>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="purchase_date" class="form-label">Data de Aquisição</label>
+                <input type="date" class="form-control" id="purchase_date" name="purchase_date" value="{{ item.purchase_date }}" required>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="location" class="form-label">Localização/Setor</label>
+                <input type="text" class="form-control" id="location" name="location" value="{{ item.location }}" required>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="serial_number" class="form-label">Número de Série (Opcional)</label>
+                <input type="text" class="form-control" id="serial_number" name="serial_number" value="{{ item.serial_number or '' }}">
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="status" class="form-label">Status/Uso (Condição)</label>
+                <select class="form-select" id="status" name="status" required>
+                    {% set statuses = ['Muito Bom', 'Bom', 'Aceitável', 'Ruim', 'Quebrado'] %}
+                    {% for s in statuses %}
+                        <option value="{{ s }}" {% if s == item.status %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="availability_status" class="form-label">Disponibilidade</label>
+                <select class="form-select" id="availability_status" name="availability_status" required>
+                    {% set availability_statuses = ['Em uso', 'Livre', 'Devolvido'] %}
+                    {% for s in availability_statuses %}
+                        <option value="{{ s }}" {% if s == item.availability_status %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- NOVO CAMPO DE OBSERVAÇÕES -->
+        <div class="mb-3">
+            <label for="status_notes" class="form-label">Observações sobre a Mudança de Status</label>
+            <textarea class="form-control" id="status_notes" name="status_notes" rows="2" placeholder="Se o status foi alterado, descreva o motivo aqui (ex: tela trincada, peça faltando, etc.)."></textarea>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="assigned_to" class="form-label">Atribuído a (Opcional)</label>
+                <input type="text" class="form-control" id="assigned_to" name="assigned_to" value="{{ item.assigned_to or '' }}">
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="authorized_by" class="form-label">Autorizado por (Opcional)</label>
+                <input type="text" class="form-control" id="authorized_by" name="authorized_by" value="{{ item.authorized_by or '' }}">
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end">
+            <a href="{{ url_for('index') }}" class="btn btn-secondary me-2">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

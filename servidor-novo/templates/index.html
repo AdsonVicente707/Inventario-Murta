@@ -1,0 +1,267 @@
+{% extends 'base.html' %}
+
+{% block title %}Página Inicial{% endblock %}
+
+{% block content %}
+    <style>
+        /* Sci-Fi Dark Theme for Inventory Table */
+        .table-container {
+            background-color: #000000; /* Black background */
+            padding: 2rem;
+            border-radius: 0.75rem;
+           
+          
+        }
+
+        .table-futuristic {
+            border-collapse: collapse; /* Use grid lines */
+            width: 100%;
+            color: #00cfff; /* Electric blue for data */
+        }
+
+        .table-futuristic thead th {
+            border: none;
+            border-bottom: 1px solid #efeaf3ff; /* Dark purple grid line */
+            color: #f5f2f8ff; /* Glowing purple for headers */
+           
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            padding: 1rem;
+        }
+
+        .table-futuristic tbody tr {
+            background-color: transparent;
+            transition: background-color 0.2s ease;
+        }
+
+        .table-futuristic tbody tr:hover {
+            background-color: #1a0029; /* Very subtle dark purple highlight on hover */
+        }
+
+        .table-futuristic td {
+            border: none;
+            border-bottom: 1px solid #333; /* Thin, almost invisible grid lines */
+            vertical-align: middle;
+            padding: 1rem;
+        }
+
+        /* Form elements styling */
+        .form-control.search-input {
+            background-color: #111;
+           
+           
+        }
+        .form-control.search-input:focus {
+            background-color: #111;
+            border-color: #f0eef1ff;
+            box-shadow: 0 0 0 0.25rem rgba(192, 126, 255, 0.25);
+            color: #fff;
+        }
+        .btn-search {
+            background-color: transparent;
+            border-color: #4f6efaff;
+            color: #eeedf7ff;
+        }
+        .btn-search:hover {
+            background-color: #0b3fcfff;
+            color: #eee7e7ff;
+            box-shadow: 0 0 10px rgba(19, 63, 185, 0.5);
+        }
+
+        /* Action Buttons */
+        .btn-group .btn {
+            color: #999;
+        }
+        .btn-group .btn:hover {
+            color: #3f3ce4ff;
+            transform: scale(1.1);
+        }
+        .btn-group .btn-outline-danger:hover {
+            color: #ff4d4d;
+        }
+
+        /* Status Dots */
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+        .status-dot.green {
+            background-color: #00ff00;
+            box-shadow: 0 0 8px #00ff00;
+        }
+        .status-dot.blue {
+            background-color: #00bfff;
+            box-shadow: 0 0 8px #00bfff;
+        }
+        .status-dot.cyan {
+            background-color: #00ffff;
+            box-shadow: 0 0 8px #00ffff;
+        }
+        .status-dot.yellow {
+            background-color: #ffff00;
+            box-shadow: 0 0 8px #ffff00;
+        }
+        .status-dot.red {
+            background-color: #ff0000;
+            box-shadow: 0 0 8px #ff0000;
+        }
+        .status-dot.grey {
+            background-color: #808080;
+        }
+
+        .btn-futuristic-add {
+            background-color: #1a1a1a; /* Dark grey/black */
+            color: #fff;
+            font-weight: bold;
+            text-transform: uppercase;
+            border: 1px solid #00c3ffff; /* Neon green border */
+            border-radius: 0.375rem; /* Slightly rounded corners */
+            padding: 0.5rem 1rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 
+                0 0 2px #0059ffff, /* Outer green glow */
+                inset 0 0 8px rgba(0, 170, 255, 0.5); /* Inner blue glow */
+        }
+
+        .btn-futuristic-add:hover {
+            color: #fff;
+            box-shadow: 
+                0 0 5px #00aeffff, /* Brighter outer glow */
+                inset 0 0 12px rgba(0, 170, 255, 0.7); /* Brighter inner glow */
+        }
+
+    </style>
+    <div class="table-container">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1>
+                {{ title | default('Inventário') }}
+                {% if request.args.get('category') and not title %}<small class="text-muted">: {{ request.args.get('category') }}</small>{% endif %}
+            </h1>
+            {% if g.user.role == 'admin' %}
+                <div>
+                    <a href="{{ url_for('export_csv', q=request.args.get('q', ''), category=request.args.get('category')) }}" class="btn btn-search me-2">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Exportar CSV
+                    </a>
+                    <a href="{{ url_for('add') }}" class="btn btn-futuristic-add">Adicionar</a>
+                </div>
+            {% else %}
+                <div>
+                    {# Este botão é um placeholder para a funcionalidade de requisição do usuário #}
+                    <a href="#" class="btn btn-futuristic-add">
+                        <i class="bi bi-send"></i> Make a Request
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+
+        <form method="get" class="mb-4" action="{{ url_for(endpoint | default('index')) }}">
+            <div class="input-group">
+                <input type="text" name="q" class="form-control search-input" placeholder="Buscar por nome, categoria ou localização..." value="{{ request.args.get('q', '') }}">
+                <button class="btn btn-search" type="submit">
+                    <i class="bi bi-search"></i> Buscar
+                </button>
+            </div>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table table-futuristic">
+                <thead>
+                    <tr>
+                    <th>Nome</th>
+                    <th>Modelo</th>
+                    <th>Categoria</th>
+                    <th>Localização</th>
+                    <th>Data de Aquisição</th>
+                    <th>Nº de Série</th>
+                    <th>Condição</th>
+                    <th>Disponibilidade</th>
+                    <th>Atribuído a</th>
+                    <th>Autorizado por</th>
+                    {% if g.user.role == 'admin' %}
+                        <th>Ações</th>
+                    {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item['name'] }}</td>
+                    <td>{{ item['model'] or 'N/A' }}</td>
+                    <td>{{ item['category'] }}</td>
+                    <td>{{ item['location'] }}</td>
+                    <td>{{ item['purchase_date'] }}</td>
+                    <td>{{ item['serial_number'] or 'N/A' }}</td>
+                    <td>
+                        {% set status_map = {
+                            'Muito Bom': 'green',
+                            'Bom': 'blue',
+                            'Aceitável': 'cyan',
+                            'Ruim': 'yellow',
+                            'Quebrado': 'red'
+                        } %}
+                        {% set dot_color = status_map.get(item['status'], 'grey') %}
+                        <span class="status-dot {{ dot_color }}"></span>{{ item['status'] }}
+                    </td>
+                    <td>{{ item['availability_status'] or 'N/A' }}</td>
+                    <td>{{ item['assigned_to'] or 'N/A' }}</td>
+                    <td>{{ item['authorized_by'] or 'N/A' }}</td>
+                    {% if g.user.role == 'admin' %}
+                        <td>
+                            <!-- Grupo de botões com ícones para um visual mais compacto e moderno -->
+                            <div class="btn-group" role="group" aria-label="Ações do item">
+                                <a href="{{ url_for('edit', id=item['id']) }}" class="btn btn-sm" title="Editar">
+                                    <i class="bi bi-pencil-square"></i>
+                                </a>
+                                <a href="{{ url_for('generate_pdf_report', id=item['id']) }}" class="btn btn-sm" title="Gerar Relatório PDF" target="_blank">
+                                    <i class="bi bi-file-earmark-pdf"></i>
+                                </a>
+                                <a href="{{ url_for('item_history', id=item['id']) }}" class="btn btn-sm" title="Histórico de Status">
+                                    <i class="bi bi-clock-history"></i>
+                                </a>
+                                <form action="{{ url_for('delete', id=item['id']) }}" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Excluir" onclick="return confirm('Tem certeza que deseja excluir este item?');"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </div>
+                        </td>
+                    {% endif %}
+                </tr>
+                {% else %}
+                <tr>
+                    <!-- Colspan ajustado para o número correto de colunas -->
+                    <td colspan="{% if g.user.role == 'admin' %}11{% else %}10{% endif %}" class="text-center">Nenhum item encontrado.</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if total_pages > 1 %}
+    <nav aria-label="Paginação do inventário" class="mt-4">
+        <ul class="pagination justify-content-center">
+            <!-- Link para a página anterior -->
+            <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for(endpoint | default('index'), page=page-1, q=request.args.get('q', '')) }}">Anterior</a>
+            </li>
+
+            <!-- Links das páginas -->
+            {% for p in range(1, total_pages + 1) %}
+                <li class="page-item {% if p == page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for(endpoint | default('index'), page=p, q=request.args.get('q', '')) }}">{{ p }}</a>
+                </li>
+            {% endfor %}
+
+            <!-- Link para a próxima página -->
+            <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for(endpoint | default('index'), page=page+1, q=request.args.get('q', '')) }}">Próxima</a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+{% endblock %}

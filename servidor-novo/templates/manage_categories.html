@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Gerenciar Categorias{% endblock %}
+
+{% block content %}
+<div class="bg-light text-dark p-4 rounded shadow-sm">
+    <h1>Gerenciar Categorias</h1>
+    <p class="text-muted">Aqui você pode renomear ou remover categorias existentes. As alterações afetarão todos os itens associados.</p>
+    <hr>
+
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Nome da Categoria</th>
+                    <th class="text-end">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cat in categories %}
+                <tr>
+                    <td>{{ cat.category }}</td>
+                    <td class="text-end">
+                        <!-- Botão para abrir modal de edição -->
+                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editModal-{{ loop.index }}">
+                            <i class="bi bi-pencil-square"></i> Renomear
+                        </button>
+                        <!-- Botão para abrir modal de exclusão -->
+                        <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteModal-{{ loop.index }}">
+                            <i class="bi bi-trash"></i> Remover
+                        </button>
+
+                        <!-- Modal de Edição -->
+                        <div class="modal fade" id="editModal-{{ loop.index }}" tabindex="-1" aria-labelledby="editModalLabel-{{ loop.index }}" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <form method="post" action="{{ url_for('manage_categories') }}">
+                                        <input type="hidden" name="action" value="edit">
+                                        <input type="hidden" name="old_name" value="{{ cat.category }}">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="editModalLabel-{{ loop.index }}">Renomear Categoria</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body text-start">
+                                            <p>Renomeando a categoria: <strong>{{ cat.category }}</strong></p>
+                                            <div class="mb-3">
+                                                <label for="new_name-{{ loop.index }}" class="form-label">Novo nome da categoria:</label>
+                                                <input type="text" name="new_name" id="new_name-{{ loop.index }}" class="form-control" required>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal de Exclusão -->
+                        <div class="modal fade" id="deleteModal-{{ loop.index }}" tabindex="-1" aria-labelledby="deleteModalLabel-{{ loop.index }}" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <form method="post" action="{{ url_for('manage_categories') }}">
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="name_to_delete" value="{{ cat.category }}">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="deleteModalLabel-{{ loop.index }}">Confirmar Remoção</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body text-start">
+                                            <p>Você tem certeza que deseja remover a categoria <strong>"{{ cat.category }}"</strong>?</p>
+                                            <p class="text-muted small">Esta ação não excluirá os itens, apenas removerá a associação deles com esta categoria.</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                            <button type="submit" class="btn btn-danger">Sim, Remover Categoria</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="2" class="text-center">Nenhuma categoria encontrada.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

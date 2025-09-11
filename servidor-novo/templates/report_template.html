@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Item - {{ item.name }}</title>
+    <style>
+        /* Estilos básicos para o relatório em PDF */
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        h1 {
+            color: #0056b3; /* Um azul corporativo */
+            text-align: center;
+            border-bottom: 2px solid #0056b3;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+
+        .container {
+            width: 100%;
+        }
+
+        .item-image {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .item-image img {
+            max-width: 250px;
+            max-height: 250px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 5px;
+        }
+
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .details-table th, .details-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .details-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            width: 30%;
+        }
+
+        footer {
+            position: fixed;
+            bottom: -1.5cm;
+            left: 0;
+            right: 0;
+            height: 1cm;
+            text-align: center;
+            font-size: 0.8em;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <footer>
+        Relatório gerado em {{ now.strftime('%d/%m/%Y às %H:%M:%S') }}
+    </footer>
+
+    <h1>Relatório de Detalhes do Item</h1>
+
+    <div class="container">
+        <table class="details-table">
+            <tr><th>Nome do Item</th><td>{{ item.name }}</td></tr>
+            <tr><th>Modelo</th><td>{{ item.model or 'N/A' }}</td></tr>
+            <tr><th>Categoria</th><td>{{ item.category }}</td></tr>
+            <tr><th>Localização</th><td>{{ item.location }}</td></tr>
+            <tr><th>Data de Aquisição</th><td>{{ item.purchase_date }}</td></tr>
+            <tr><th>Número de Série</th><td>{{ item.serial_number or 'N/A' }}</td></tr>
+            <tr><th>Condição/Uso</th><td>{{ item.status }}</td></tr>
+            <tr><th>Disponibilidade</th><td>{{ item.availability_status or 'N/A' }}</td></tr>
+            <tr><th>Atribuído a</th><td>{{ item.assigned_to or 'N/A' }}</td></tr>
+            <tr><th>Autorizado por</th><td>{{ item.authorized_by or 'N/A' }}</td></tr>
+        </table>
+    </div>
+</body>
+</html>
