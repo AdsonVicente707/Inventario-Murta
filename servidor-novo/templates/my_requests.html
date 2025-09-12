@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var itemCondition = button.getAttribute('data-item-condition');
  
             var form = returnModal.querySelector('#return-item-form');
-            form.action = "{{ url_for('return_item', request_id=0) }}".replace('0', requestId);
+            form.action = `/return_item/${requestId}`;
  
             returnModal.querySelector('#modal-item-name').textContent = itemName;
             returnModal.querySelector('#new_condition').value = itemCondition;

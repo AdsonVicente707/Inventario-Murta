@@ -140,4 +140,72 @@
         </div>
     </div>
 </div>
+
+<!-- Gráfico de Atividades -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="table-container" style="background-color: #000000;">
+            <h3 class="mb-3">Atividades nos Últimos 30 Dias</h3>
+            <canvas id="activityChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Inclui a biblioteca Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const ctx = document.getElementById('activityChart').getContext('2d');
+    
+    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(0, 199, 255, 0.6)');   
+    gradient.addColorStop(1, 'rgba(0, 120, 255, 0.6)');
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: {{ chart_labels|tojson }},
+            datasets: [{
+                label: 'Número de Atividades',
+                data: {{ chart_data|tojson }},
+                backgroundColor: gradient,
+                borderColor: '#00cfff',
+                borderWidth: 1,
+                borderRadius: 4,
+                hoverBackgroundColor: '#00cfff'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleFont: { size: 14, weight: 'bold' },
+                    bodyFont: { size: 12 },
+                    padding: 10,
+                    cornerRadius: 4,
+                    displayColors: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        stepSize: 1 // Garante que o eixo Y tenha apenas números inteiros
+                    },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                x: {
+                    ticks: { color: 'rgba(255, 255, 255, 0.7)' },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+});
+</script>
 {% endblock %}
