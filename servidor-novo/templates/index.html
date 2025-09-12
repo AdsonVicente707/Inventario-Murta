@@ -194,7 +194,7 @@
                 <tr>
                     {% if g.user.role != 'admin' %}
                     <td>
-                        {% if item.availability_status == 'Disponível' %}<input type="checkbox" name="item_ids" value="{{ item.id }}" class="item-checkbox">{% endif %}
+                        {% if item.availability_status == 'Livre' %}<input type="checkbox" name="item_ids" value="{{ item.id }}" class="item-checkbox">{% endif %}
                     </td>
                     {% endif %}
                     <td>{{ item['name'] }}</td>
@@ -236,7 +236,7 @@
                             </div>
                         {% else %}
                             {# Lógica para usuários comuns #}
-                            {% if item.availability_status == 'Disponível' %}
+                            {% if item.availability_status == 'Livre' %}
                                 <!-- Botão de requisição individual que também abre o modal -->
                                 <button type="button" class="btn btn-futuristic-add btn-sm request-single-item-btn" data-item-id="{{ item.id }}" data-bs-toggle="modal" data-bs-target="#batchRequestModal">
                                     <i class="bi bi-send"></i> Requisitar

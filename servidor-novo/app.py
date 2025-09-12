@@ -382,7 +382,7 @@ def request_item(item_id):
     db = get_db()
     item = get_item(item_id)
 
-    if item['availability_status'] != 'Disponível':
+    if item['availability_status'] != 'Livre':
         flash('Este item não está disponível para requisição.', 'warning')
         return redirect(url_for('index'))
     
@@ -466,7 +466,7 @@ def request_multiple_items():
     
     for item_id in item_ids:
         item = get_item(item_id) # This already aborts if not found
-        if item['availability_status'] == 'Disponível':
+        if item['availability_status'] == 'Livre':
             try:
                 db.execute(
                     'INSERT INTO item_requests (item_id, user_id, status, notes) VALUES (?, ?, ?, ?)',
