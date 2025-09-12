@@ -1,54 +1,91 @@
 {% extends 'base.html' %}
 
 {% block title %}Gerenciar Usuários{% endblock %}
-
+ 
 {% block content %}
-<div class="bg-light text-dark p-4 rounded shadow-sm">
-    <h1>Gerenciar Usuários</h1>
-    <p class="text-muted">Atribua papéis de 'admin' ou 'usuário' para controlar o acesso às funcionalidades do sistema.</p>
-    <hr>
-
+<div class="table-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Gerenciar Usuários</h1>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
+            <i class="bi bi-person-plus-fill"></i> Criar Novo Usuário
+        </button>
+    </div>
+ 
     <div class="table-responsive">
-        <table class="table table-hover align-middle">
+        <table class="table table-futuristic">
             <thead>
                 <tr>
                     <th>Nome de Usuário</th>
-                    <th>Papel Atual</th>
-                    <th class="text-end">Alterar Papel</th>
+                    <th>Perfil Atual</th>
+                    <th style="width: 250px;">Alterar Perfil</th>
                 </tr>
             </thead>
             <tbody>
                 {% for user in users %}
                 <tr>
-                    <td>
-                        {{ user.username }}
-                        {% if user.id == g.user.id %}
-                            <span class="badge bg-primary ms-2">Você</span>
-                        {% endif %}
+                    <td class="align-middle">{{ user.username }}</td>
+                    <td class="align-middle">
+                        <span class="badge {% if user.role == 'admin' %}bg-success{% else %}bg-secondary{% endif %}">{{ user.role }}</span>
                     </td>
                     <td>
-                        <span class="badge bg-{{ 'success' if user.role == 'admin' else 'secondary' }}">
-                            {{ user.role }}
-                        </span>
-                    </td>
-                    <td class="text-end">
                         {% if user.id != g.user.id %}
-                            <form method="post" action="{{ url_for('manage_users') }}" class="d-inline-flex align-items-center">
-                                <input type="hidden" name="user_id" value="{{ user.id }}">
-                                <select name="role" class="form-select form-select-sm me-2" style="width: auto;">
-                                    <option value="user" {% if user.role == 'user' %}selected{% endif %}>Usuário</option>
-                                    <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
-                                </select>
-                                <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
-                            </form>
+                        <form method="post" action="{{ url_for('manage_users') }}" class="d-flex">
+                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                            <input type="hidden" name="action" value="update_role">
+                            <select name="role" class="form-select form-select-sm me-2">
+                                <option value="user" {% if user.role == 'user' %}selected{% endif %}>Usuário</option>
+                                <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-light">Salvar</button>
+                        </form>
                         {% else %}
-                            <span class="text-muted fst-italic">Não é possível alterar seu próprio papel.</span>
+                        <span class="text-muted fst-italic">(Você)</span>
                         {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- Modal de Criação de Usuário -->
+<div class="modal fade" id="createUserModal" tabindex="-1" aria-labelledby="createUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('manage_users') }}" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createUserModalLabel">Criar Novo Usuário</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="create_user">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Nome de Usuário</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Senha</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">Confirmar Senha</label>
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="role" class="form-label">Perfil</label>
+                        <select class="form-select" id="role" name="role" required>
+                            <option value="user" selected>Usuário</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Criar Usuário</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 {% endblock %}

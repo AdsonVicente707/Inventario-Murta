@@ -31,7 +31,11 @@
                             <li class="px-3 py-2 fw-bold">Notificações</li>
                             <li><hr class="dropdown-divider"></li>
                             {% for notification in notifications %}
-                                <li><a class="dropdown-item small" href="{{ notification.link or '#' }}">{{ notification.message }}</a></li>
+                                <li>
+                                    <a class="dropdown-item small" href="{{ url_for('read_notification', notification_id=notification.id) }}">
+                                        {{ notification.message }}
+                                    </a>
+                                </li>
                             {% else %}
                                 <li><p class="dropdown-item-text text-center text-muted small">Nenhuma nova notificação.</p></li>
                             {% endfor %}
@@ -47,9 +51,15 @@
                     </div>
                     <div class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="navbarUserDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="bi bi-person-circle me-1"></i> Olá, {{ g.user['username'] }}
+                            {% if g.user.profile_image_file %}
+                                <img src="{{ url_for('profile_pic', filename=g.user.profile_image_file) }}" alt="Foto de Perfil" class="rounded-circle me-2" style="width: 24px; height: 24px; object-fit: cover;">
+                            {% else %}
+                                <i class="bi bi-person-circle me-2"></i>
+                            {% endif %}
+                            Olá, {{ g.user['username'] }}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('profile') }}">Meu Perfil</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('my_requests') }}">Minhas Requisições</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Alterar Senha</a></li>
                             <li><hr class="dropdown-divider"></li>
@@ -88,7 +98,7 @@
                         </div>
                     </div>
 
-                    {% if g.user.role == 'admin' %}
+                    {% if g.user['role'] == 'admin' %}
                         <a href="{{ url_for('manage_users') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'manage_users' %}active{% endif %}">
                             <i class="bi bi-people me-2"></i>Gerenciar Usuários
                         </a>
@@ -103,6 +113,10 @@
 
                         <a href="{{ url_for('broken_items') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'broken_items' %}active{% endif %}">
                             <i class="bi bi-wrench-adjustable-circle me-2"></i>Avarias
+                        </a>
+
+                        <a href="{{ url_for('user_assets') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'user_assets' %}active{% endif %}">
+                            <i class="bi bi-person-lines-fill me-2"></i>Itens por Usuário
                         </a>
 
                         <a href="{{ url_for('logs') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'logs' %}active{% endif %}">

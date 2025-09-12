@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+
+{% block title %}Meu Perfil{% endblock %}
+ 
+{% block content %}
+<style>
+    .profile-header {
+        position: relative;
+    }
+    .profile-pic-container {
+        position: relative;
+        width: 120px;
+        height: 120px;
+    }
+    .profile-pic {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 50%;
+        border: 4px solid #00cfff;
+    }
+    .upload-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-radius: 50%;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        cursor: pointer;
+    }
+    .profile-pic-container:hover .upload-overlay {
+        opacity: 1;
+    }
+    .stat-card-minimalist {
+        background-color: #111;
+        border-left: 5px solid;
+        transition: transform 0.2s ease;
+    }
+    .stat-card-minimalist:hover {
+        transform: scale(1.03);
+    }
+</style>
+ 
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="p-4 rounded profile-header" style="background-color: #1a0029;">
+                <div class="d-flex align-items-center">
+                    <div class="profile-pic-container me-4" onclick="document.getElementById('profilePicInput').click();">
+                        {% if g.user.profile_image_file %}
+                            <img src="{{ url_for('profile_pic', filename=g.user.profile_image_file) }}" alt="Foto de Perfil" class="profile-pic">
+                        {% else %}
+                            <img src="https://via.placeholder.com/120/1a0029/00cfff?text={{ g.user.username[0]|upper }}" alt="Foto de Perfil" class="profile-pic">
+                        {% endif %}
+                        <div class="upload-overlay">
+                            <i class="bi bi-camera-fill fs-3"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <h1 class="mb-0">{{ g.user.username }}</h1>
+                        <span class="badge bg-primary text-uppercase">{{ g.user.role }}</span>
+                    </div>
+                    <form action="{{ url_for('profile') }}" method="post" enctype="multipart/form-data" class="d-none">
+                        <input type="file" name="profile_pic" id="profilePicInput" accept="image/*" onchange="this.form.submit()">
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+ 
+    <!-- Cards de Estatísticas -->
+    <div class="row g-4 mb-4">
+        {% if g.user['role'] == 'admin' %}
+            <div class="col-md-4">
+                <div class="p-3 rounded h-100 stat-card-minimalist" style="border-color: #00ff00;">
+                    <h5 class="text-muted text-uppercase">Requisições Aprovadas</h5><h2 class="display-6 fw-bold">{{ stats.approved_requests }}</h2>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 rounded h-100 stat-card-minimalist" style="border-color: #ff0000;">
+                    <h5 class="text-muted text-uppercase">Requisições Recusadas</h5><h2 class="display-6 fw-bold">{{ stats.denied_requests }}</h2>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 rounded h-100 stat-card-minimalist" style="border-color: #00cfff;">
+                    <h5 class="text-muted text-uppercase">Itens no Inventário</h5><h2 class="display-6 fw-bold">{{ stats.total_items_added }}</h2>
+                </div>
+            </div>
+        {% else %}
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100 stat-card-minimalist" style="border-color: #00cfff;">
+                    <h5 class="text-muted text-uppercase">Total de Requisições</h5><h2 class="display-6 fw-bold">{{ stats.total_requests }}</h2>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100 stat-card-minimalist" style="border-color: #00ff00;">
+                    <h5 class="text-muted text-uppercase">Itens em Posse</h5><h2 class="display-6 fw-bold">{{ stats.items_in_possession }}</h2>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+ 
+    <!-- Atividades Recentes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="table-container" style="background-color: #000000;">
+                <h3 class="mb-3">Atividades Recentes</h3>
+                {% if recent_activities %}
+                    <div class="table-responsive">
+                        <table class="table table-futuristic">
+                            <thead>
+                                <tr>
+                                    <th>Ação</th>
+                                    <th>Item</th>
+                                    <th>Data</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for activity in recent_activities %}
+                                <tr>
+                                    <td>{{ activity.action }}</td>
+                                    <td>{{ activity.item_name or 'N/A' }}</td>
+                                    <td>{{ activity.timestamp.split('.')[0] }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-center text-muted">Nenhuma atividade recente encontrada.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

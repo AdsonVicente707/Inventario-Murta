@@ -16,11 +16,11 @@
         transform: translateY(-5px);
         box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
     }
-    /* Gradient backgrounds for the cards */
-    .bg-gradient-teal { background: linear-gradient(45deg, #20c996af, #17a3b804); }
-    .bg-gradient-pink { background: linear-gradient(45deg, #d63384ab, #e83e8d09); }
-    .bg-gradient-purple { background: linear-gradient(45deg, #6e42c1b4, #8a63d204); }
-    .bg-gradient-blue { background: linear-gradient(45deg, #0d6dfda9, rgba(13, 202, 240, 0.03)); }
+    /* Paleta de gradientes em tons de azul */
+    .bg-gradient-teal { background: linear-gradient(45deg, #0d6efd, #4ea7dea1); } /* Light Blue */
+    .bg-gradient-pink { background: linear-gradient(45deg, #0d6efd, #4ea7de98); } /* Dark Blue */
+    .bg-gradient-purple { background: linear-gradient(45deg, #0d6efd, #4ea7de91); } /* Electric Blue */
+    .bg-gradient-blue { background: linear-gradient(45deg, #0d6efd, #4ea7de9a); } /* Primary Blue */
 
     .stat-card .card-title {
         font-size: 0.9rem;
@@ -105,6 +105,29 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Dashboard</h1>
 </div>
+
+<!-- Alertas de Estoque Baixo (Apenas para Admins) -->
+{% if g.user['role'] == 'admin' and low_stock_categories %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-warning">
+            <h4 class="alert-heading"><i class="bi bi-exclamation-triangle-fill"></i> Alerta de Estoque Baixo!</h4>
+            <p>As seguintes categorias estão com o número de itens livres abaixo do mínimo definido:</p>
+            <ul>
+                {% for cat in low_stock_categories %}
+                <li>
+                    <strong>{{ cat.category }}</strong>: {{ cat.available_items }} de {{ cat.min_stock_level }} itens livres.
+                </li>
+                {% endfor %}
+            </ul>
+            <hr>
+            <a href="{{ url_for('manage_stock_levels') }}" class="btn btn-warning fw-bold">
+                <i class="bi bi-graph-down-arrow"></i> Gerenciar Níveis de Estoque
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Stat Cards -->
 <div class="row g-4 mb-4">

@@ -1,21 +1,22 @@
 {% extends 'base.html' %}
 
 {% block title %}Minhas Requisições{% endblock %}
-
+ 
 {% block content %}
-<div class="bg-light text-dark p-4 rounded shadow-sm">
-    <h1>Minhas Requisições</h1>
-    <p class="text-muted">Acompanhe o status dos itens que você requisitou.</p>
-    <hr>
-
+<div class="table-container">
+    <h1 class="mb-4">Minhas Requisições</h1>
+ 
+    {% if requests %}
     <div class="table-responsive">
-        <table class="table table-hover align-middle">
+        <table class="table table-futuristic">
             <thead>
                 <tr>
                     <th>Data</th>
-                    <th>Item Requisitado</th>
+                    <th>Item</th>
                     <th>Status</th>
-                    <th>Seu Comentário</th>
+                    <th>Suas Observações</th>
+                    <th>Resposta / Justificativa</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -24,22 +25,100 @@
                     <td>{{ req.request_date.split(' ')[0] }}</td>
                     <td>{{ req.item_name }}</td>
                     <td>
-                        {% set status_map = {
-                            'Pendente': 'warning',
-                            'Aprovado': 'success',
-                            'Recusado': 'danger'
-                        } %}
-                        <span class="badge bg-{{ status_map.get(req.status, 'secondary') }}">{{ req.status }}</span>
+                        <span class="badge 
+                            {% if req.status == 'Aprovado' %}bg-success
+                            {% elif req.status == 'Recusado' %}bg-danger
+                            {% elif req.status == 'Devolvido' %}bg-info
+                            {% else %}bg-warning
+                            {% endif %}">
+                            {{ req.status }}
+                        </span>
                     </td>
-                    <td>{{ req.notes or 'Nenhum' }}</td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="4" class="text-center">Você ainda não fez nenhuma requisição.</td>
+                    <td>{{ req.notes or 'N/A' }}</td>
+                    <td>
+                        {% if req.status == 'Recusado' and req.response_notes %}
+                            <span class="text-danger-emphasis">Admin: {{ req.response_notes }}</span>
+                        {% elif req.status == 'Devolvido' and req.return_notes %}
+                            <span class="text-info-emphasis">Você: {{ req.return_notes }}</span>
+                        {% else %}
+                            <span class="text-muted">--</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if req.status == 'Aprovado' %}
+                        <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#returnItemModal" 
+                                data-request-id="{{ req.id }}" 
+                                data-item-name="{{ req.item_name }}"
+                                data-item-condition="{{ req.item_condition }}">
+                            <i class="bi bi-arrow-return-left"></i> Devolver
+                        </button>
+                        {% else %}
+                        <span class="text-muted">--</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    {% else %}
+    <p class="text-center text-muted">Você ainda não fez nenhuma requisição.</p>
+    {% endif %}
 </div>
+ 
+<!-- Modal de Devolução de Item -->
+<div class="modal fade" id="returnItemModal" tabindex="-1" aria-labelledby="returnItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="return-item-form" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="returnItemModalLabel">Devolver Item</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Você está devolvendo o item: <strong id="modal-item-name"></strong>.</p>
+                    
+                    <div class="mb-3">
+                        <label for="new_condition" class="form-label">Qual a condição atual do item?</label>
+                        <select class="form-select" id="new_condition" name="new_condition" required>
+                            {% set statuses = ['Muito Bom', 'Bom', 'Aceitável', 'Ruim', 'Quebrado'] %}
+                            {% for s in statuses %}
+                                <option value="{{ s }}">{{ s }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+ 
+                    <div class="mb-3">
+                        <label for="return_notes" class="form-label">Justificativa da Devolução (opcional):</label>
+                        <textarea class="form-control" id="return_notes" name="return_notes" rows="3" placeholder="Ex: Projeto finalizado, item apresentou defeito, etc."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Confirmar Devolução</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+ 
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var returnModal = document.getElementById('returnItemModal');
+    if (returnModal) {
+        returnModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var requestId = button.getAttribute('data-request-id');
+            var itemName = button.getAttribute('data-item-name');
+            var itemCondition = button.getAttribute('data-item-condition');
+ 
+            var form = returnModal.querySelector('#return-item-form');
+            form.action = "{{ url_for('return_item', request_id=0) }}".replace('0', requestId);
+ 
+            returnModal.querySelector('#modal-item-name').textContent = itemName;
+            returnModal.querySelector('#new_condition').value = itemCondition;
+        });
+    }
+});
+</script>
 {% endblock %}

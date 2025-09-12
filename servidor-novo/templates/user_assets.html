@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block title %}Itens por Usuário{% endblock %}
+
+{% block content %}
+<div class="table-container">
+    <h1 class="mb-4">Itens por Usuário</h1>
+    <p class="text-muted mb-4">Veja abaixo a lista de todos os usuários e os itens que estão atualmente em posse de cada um.</p>
+
+    <div class="accordion" id="userAssetsAccordion">
+        {% for username, items in assets_by_user.items() %}
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-{{ loop.index }}">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}" aria-expanded="false" aria-controls="collapse-{{ loop.index }}">
+                    <i class="bi bi-person-fill me-2"></i>
+                    {{ username }}
+                    <span class="badge bg-primary rounded-pill ms-auto me-2">{{ items|length }} Itens</span>
+                </button>
+            </h2>
+            <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ loop.index }}" data-bs-parent="#userAssetsAccordion">
+                <div class="accordion-body">
+                    {% if items %}
+                        <ul class="list-group list-group-flush">
+                            {% for item in items %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ item.name }}
+                                    <a href="{{ url_for('edit', id=item.id) }}" class="btn btn-sm btn-outline-light" title="Ver detalhes do item">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted text-center mb-0">Nenhum item em posse deste usuário.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

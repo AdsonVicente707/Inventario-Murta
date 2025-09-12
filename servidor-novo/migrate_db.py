@@ -30,6 +30,53 @@ def add_column_if_not_exists(db_path, table_name, column_name, column_type):
     finally:
         if conn:
             conn.close()
+
+def create_users_table_if_not_exists(db_path):
+    """Cria a tabela de usuários se ela não existir."""
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        print("Verificando a existência da tabela 'users'...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user'
+            )
+        """)
+        print("Tabela 'users' verificada/criada com sucesso.")
+    except sqlite3.Error as e:
+        print(f"Ocorreu um erro no banco de dados ao criar a tabela 'users': {e}")
+
+def create_items_table_if_not_exists(db_path):
+    """Cria a tabela de itens se ela não existir."""
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        print("Verificando a existência da tabela 'items'...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                model TEXT,
+                category TEXT,
+                location TEXT,
+                purchase_date DATE,
+                serial_number TEXT,
+                status TEXT,
+                availability_status TEXT,
+                image_file TEXT,
+                assigned_to TEXT,
+                authorized_by TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        print("Tabela 'items' verificada/criada com sucesso.")
+    except sqlite3.Error as e:
+        print(f"Ocorreu um erro no banco de dados ao criar a tabela 'items': {e}")
  
 def create_requests_table_if_not_exists(db_path):
     """Cria a tabela de requisições de itens se ela não existir."""
@@ -46,6 +93,8 @@ def create_requests_table_if_not_exists(db_path):
                 request_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 status TEXT NOT NULL DEFAULT 'Pendente', -- Pendente, Aprovado, Recusado
                 notes TEXT,
+                response_notes TEXT, -- Adicionado para justificativa do admin
+                return_notes TEXT,   -- Adicionado para justificativa do usuário na devolução
                 FOREIGN KEY (item_id) REFERENCES items (id),
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
@@ -75,6 +124,73 @@ def create_notifications_table_if_not_exists(db_path):
         print("Tabela 'notifications' verificada/criada com sucesso.")
     except sqlite3.Error as e:
         print(f"Ocorreu um erro no banco de dados ao criar a tabela de notificações: {e}")
+
+def create_stock_settings_table_if_not_exists(db_path):
+    """Cria a tabela para configurações de nível de estoque por categoria."""
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        print("Verificando a existência da tabela 'category_stock_settings'...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS category_stock_settings (
+                category_name TEXT PRIMARY KEY,
+                min_stock_level INTEGER NOT NULL DEFAULT 0,
+                last_notified_at TIMESTAMP
+            )
+        """)
+        print("Tabela 'category_stock_settings' verificada/criada com sucesso.")
+    except sqlite3.Error as e:
+        print(f"Ocorreu um erro no banco de dados ao criar a tabela de configurações de estoque: {e}")
+
+def create_activity_log_table_if_not_exists(db_path):
+    """Cria a tabela de log de atividades se ela não existir."""
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        print("Verificando a existência da tabela 'activity_log'...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                username TEXT,
+                action TEXT,
+                item_id INTEGER,
+                item_name TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
+            )
+        """)
+        print("Tabela 'activity_log' verificada/criada com sucesso.")
+    except sqlite3.Error as e:
+        print(f"Ocorreu um erro no banco de dados ao criar a tabela de log de atividades: {e}")
+
+def create_status_history_table_if_not_exists(db_path):
+    """Cria a tabela de histórico de status dos itens se ela não existir."""
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        print("Verificando a existência da tabela 'status_history'...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS status_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_id INTEGER NOT NULL,
+                item_name TEXT,
+                old_status TEXT,
+                new_status TEXT,
+                notes TEXT,
+                changed_by_user_id INTEGER,
+                changed_by_username TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (item_id) REFERENCES items (id) ON DELETE CASCADE,
+                FOREIGN KEY (changed_by_user_id) REFERENCES users (id) ON DELETE SET NULL
+            )
+        """)
+        print("Tabela 'status_history' verificada/criada com sucesso.")
+    except sqlite3.Error as e:
+        print(f"Ocorreu um erro no banco de dados ao criar a tabela de histórico de status: {e}")
 
 def create_or_update_default_admin(db_path):
     """Cria ou atualiza o usuário administrador padrão para garantir que ele exista e tenha os dados corretos."""
@@ -114,21 +230,24 @@ def create_or_update_default_admin(db_path):
 if __name__ == '__main__':
     print("Iniciando a verificação e migração do banco de dados...")
     
-    if not os.path.exists(DATABASE_PATH):
-        print(f"Erro: O arquivo de banco de dados 'inventory.db' não foi encontrado em '{basedir}'.")
-        print("Certifique-se de que o script está na mesma pasta que o seu 'app.py'.")
-    else:
-        add_column_if_not_exists(DATABASE_PATH, 'items', 'model', 'TEXT')
-        add_column_if_not_exists(DATABASE_PATH, 'items', 'availability_status', 'TEXT')
-        add_column_if_not_exists(DATABASE_PATH, 'users', 'role', "TEXT NOT NULL DEFAULT 'user'")
-        
-        # Garante que o usuário admin padrão exista
-        create_or_update_default_admin(DATABASE_PATH)
+    # 1. Garante que todas as tabelas existam (cria o DB se necessário)
+    create_users_table_if_not_exists(DATABASE_PATH)
+    create_items_table_if_not_exists(DATABASE_PATH)
+    create_requests_table_if_not_exists(DATABASE_PATH)
+    create_notifications_table_if_not_exists(DATABASE_PATH)
+    create_stock_settings_table_if_not_exists(DATABASE_PATH)
+    create_activity_log_table_if_not_exists(DATABASE_PATH)
+    create_status_history_table_if_not_exists(DATABASE_PATH)
 
-        # Garante que a tabela de requisições exista
-        create_requests_table_if_not_exists(DATABASE_PATH)
+    # 2. Adiciona colunas que podem estar faltando em instalações antigas
+    add_column_if_not_exists(DATABASE_PATH, 'items', 'model', 'TEXT')
+    add_column_if_not_exists(DATABASE_PATH, 'items', 'availability_status', 'TEXT')
+    add_column_if_not_exists(DATABASE_PATH, 'users', 'role', "TEXT NOT NULL DEFAULT 'user'")
+    add_column_if_not_exists(DATABASE_PATH, 'item_requests', 'response_notes', 'TEXT')
+    add_column_if_not_exists(DATABASE_PATH, 'item_requests', 'return_notes', 'TEXT')
+    add_column_if_not_exists(DATABASE_PATH, 'users', 'profile_image_file', 'TEXT')
 
-        # Garante que a tabela de notificações exista
-        create_notifications_table_if_not_exists(DATABASE_PATH)
+    # 3. Garante que o usuário admin padrão exista e esteja atualizado
+    create_or_update_default_admin(DATABASE_PATH)
  
     print("\nVerificação concluída. Seu banco de dados está atualizado!")

@@ -1,63 +1,147 @@
 {% extends 'base.html' %}
 
 {% block title %}Gerenciar Requisições{% endblock %}
-
+ 
 {% block content %}
-<div class="bg-light text-dark p-4 rounded shadow-sm">
-    <h1>Gerenciar Requisições de Itens</h1>
-    <p class="text-muted">Aprove ou recuse as requisições de itens feitas pelos usuários.</p>
-    <hr>
-
+<div class="table-container">
+    <h1 class="mb-4">Gerenciar Requisições de Itens</h1>
+ 
+    {% if requests %}
     <div class="table-responsive">
-        <table class="table table-hover align-middle">
+        <table class="table table-futuristic">
             <thead>
                 <tr>
                     <th>Data</th>
-                    <th>Item Requisitado</th>
                     <th>Usuário</th>
+                    <th>Item</th>
                     <th>Status</th>
-                    <th>Motivo/Comentário</th>
-                    <th class="text-end">Ações</th>
+                    <th>Observações (Usuário)</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
             <tbody>
                 {% for req in requests %}
                 <tr>
                     <td>{{ req.request_date.split(' ')[0] }}</td>
-                    <td>{{ req.item_name }}</td>
                     <td>{{ req.user_name }}</td>
+                    <td>{{ req.item_name }}</td>
                     <td>
-                        {% set status_map = {
-                            'Pendente': 'warning',
-                            'Aprovado': 'success',
-                            'Recusado': 'danger'
-                        } %}
-                        <span class="badge bg-{{ status_map.get(req.status, 'secondary') }}">{{ req.status }}</span>
+                        <span class="badge 
+                            {% if req.status == 'Aprovado' %}bg-success
+                            {% elif req.status == 'Recusado' %}bg-danger
+                            {% elif req.status == 'Devolvido' %}bg-info
+                            {% else %}bg-warning
+                            {% endif %}">
+                            {{ req.status }}
+                        </span>
                     </td>
-                    <td>{{ req.notes or 'Nenhum' }}</td>
-                    <td class="text-end">
-                        {% if req.status == 'Pendente' %}
-                            <form method="post" action="{{ url_for('manage_requests') }}" class="d-inline">
-                                <input type="hidden" name="request_id" value="{{ req.id }}">
-                                <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">
-                                    <i class="bi bi-check-lg"></i> Aprovar
-                                </button>
-                                <button type="submit" name="action" value="deny" class="btn btn-danger btn-sm">
-                                    <i class="bi bi-x-lg"></i> Recusar
-                                </button>
-                            </form>
+                    <td>
+                        {% if req.status == 'Devolvido' and req.return_notes %}
+                            <span class="text-info-emphasis" title="Justificativa de devolução">{{ req.return_notes }}</span>
                         {% else %}
-                            <span class="text-muted fst-italic">Nenhuma ação</span>
+                            {{ req.notes or 'N/A' }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if req.status == 'Pendente' %}
+                            <div class="btn-group">
+                                <form action="{{ url_for('manage_requests') }}" method="post" class="d-inline">
+                                    <input type="hidden" name="request_id" value="{{ req.id }}">
+                                    <input type="hidden" name="action" value="approve">
+                                    <button type="submit" class="btn btn-success btn-sm">Aprovar</button>
+                                </form>
+                                <!-- Botão para abrir o modal de recusa -->
+                                <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#denyRequestModal" data-request-id="{{ req.id }}">
+                                    Recusar
+                                </button>
+                            </div>
+                        {% elif req.status == 'Devolvido' %}
+                            <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#inspectItemModal"
+                                    data-request-id="{{ req.id }}"
+                                    data-item-name="{{ req.item_name }}"
+                                    data-item-condition="{{ req.item_condition }}">
+                                <i class="bi bi-search"></i> Inspecionar
+                            </button>
+                        {% else %}
+                            <span class="text-muted">Processado</span>
                         {% endif %}
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="text-center">Nenhuma requisição encontrada.</td>
+                    <td colspan="7" class="text-center text-muted">Nenhuma requisição encontrada.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    {% else %}
+    <p class="text-center text-muted">Nenhuma requisição encontrada.</p>
+    {% endif %}
 </div>
+
+<!-- Modal de Recusa de Requisição -->
+<div class="modal fade" id="denyRequestModal" tabindex="-1" aria-labelledby="denyRequestModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('manage_requests') }}" method="post">
+                <div class="modal-header"><h5 class="modal-title" id="denyRequestModalLabel">Recusar Requisição</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                <div class="modal-body">
+                    <p>Por favor, forneça um motivo para recusar esta requisição (opcional).</p>
+                    <input type="hidden" name="request_id" id="deny-request-id"><input type="hidden" name="action" value="deny">
+                    <div class="mb-3"><label for="denial_reason" class="form-label">Motivo da Recusa:</label><textarea class="form-control" id="denial_reason" name="denial_reason" rows="3" placeholder="Ex: Item reservado..."></textarea></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-danger">Confirmar Recusa</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Inspeção de Item Devolvido -->
+<div class="modal fade" id="inspectItemModal" tabindex="-1" aria-labelledby="inspectItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="inspect-item-form" action="{{ url_for('manage_requests') }}" method="post">
+                <div class="modal-header"><h5 class="modal-title" id="inspectItemModalLabel">Inspecionar Item Devolvido</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                <div class="modal-body">
+                    <p>Inspecionando o item: <strong id="inspect-item-name"></strong>.</p>
+                    <input type="hidden" name="request_id" id="inspect-request-id"><input type="hidden" name="action" value="inspect">
+                    <div class="mb-3">
+                        <label for="final_condition" class="form-label">Confirme a condição final do item:</label>
+                        <select class="form-select" id="final_condition" name="final_condition" required>
+                            {% set statuses = ['Muito Bom', 'Bom', 'Aceitável', 'Ruim', 'Quebrado'] %}
+                            {% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <p class="small text-muted">Ao confirmar, o item voltará a ter disponibilidade "Livre" e poderá ser requisitado novamente.</p>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-primary">Confirmar e Liberar Item</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Modal de Recusa
+    var denyModal = document.getElementById('denyRequestModal');
+    if(denyModal) {
+        denyModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var requestId = button.getAttribute('data-request-id');
+            denyModal.querySelector('#deny-request-id').value = requestId;
+        });
+    }
+    // Modal de Inspeção
+    var inspectModal = document.getElementById('inspectItemModal');
+    if(inspectModal) {
+        inspectModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            inspectModal.querySelector('#inspect-request-id').value = button.getAttribute('data-request-id');
+            inspectModal.querySelector('#inspect-item-name').textContent = button.getAttribute('data-item-name');
+            inspectModal.querySelector('#final_condition').value = button.getAttribute('data-item-condition');
+        });
+    }
+});
+</script>
 {% endblock %}
