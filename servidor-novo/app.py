@@ -22,7 +22,7 @@ from werkzeug.utils import secure_filename
 import math
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from weasyprint import HTML, CSS
 
 app = Flask(__name__)
@@ -704,11 +704,36 @@ def profile():
         'SELECT action, item_name, timestamp FROM activity_log WHERE user_id = ? ORDER BY timestamp DESC LIMIT 10',
         (user_id,)
     ).fetchall()
+
+    # --- Dados para o gráfico de atividades ---
+    from collections import OrderedDict
+    activity_by_day = OrderedDict()
+    today = date.today()
+    for i in range(29, -1, -1):
+        day = today - timedelta(days=i)
+        activity_by_day[day.strftime("%Y-%m-%d")] = 0
+    
+    # Query para obter a contagem de atividades
+    activity_counts_cursor = db.execute("""
+        SELECT strftime('%Y-%m-%d', timestamp) as day, COUNT(id) as count 
+        FROM activity_log 
+        WHERE user_id = ? AND timestamp >= date('now', '-30 days')
+        GROUP BY day
+    """, (user_id,)).fetchall()
+
+    for row in activity_counts_cursor:
+        if row['day'] in activity_by_day:
+            activity_by_day[row['day']] = row['count']
+
+    chart_labels = list(activity_by_day.keys())
+    chart_data = list(activity_by_day.values())
     
     return render_template(
         'profile.html',
         stats=stats,
-        recent_activities=recent_activities
+        recent_activities=recent_activities,
+        chart_labels=chart_labels,
+        chart_data=chart_data
     )
 
 @app.route('/return_item/<int:request_id>', methods=['POST'])
@@ -736,8 +761,10 @@ def return_item(request_id):
             (return_notes, request_id)
         )
         # 2. Atualiza o item: status de disponibilidade, condição e remove atribuição
+        # O item volta a ficar 'Livre' imediatamente.
         db.execute(
             "UPDATE items SET availability_status = 'Devolvido', status = ?, assigned_to = NULL WHERE id = ?",
+            "UPDATE items SET availability_status = 'Livre', status = ?, assigned_to = NULL WHERE id = ?",
             (new_condition, item_id)
         )
         # 3. Loga a mudança de condição e a atividade de devolução
