@@ -763,7 +763,6 @@ def return_item(request_id):
         # 2. Atualiza o item: status de disponibilidade, condição e remove atribuição
         # O item volta a ficar 'Livre' imediatamente.
         db.execute(
-            "UPDATE items SET availability_status = 'Devolvido', status = ?, assigned_to = NULL WHERE id = ?",
             "UPDATE items SET availability_status = 'Livre', status = ?, assigned_to = NULL WHERE id = ?",
             (new_condition, item_id)
         )
