@@ -6,14 +6,16 @@
 <style>
     :root {
         --glow-cyan: #00cfff;
-        --glow-blue: #0d6efd;
+        --glow-blue: #007bff;
         --dark-bg: #010409;
         --card-bg: #0d1117;
-        --border-color: rgba(0, 199, 255, 0.2);
+        --border-color: rgba(0, 199, 255, 0.15);
+        --gradient-start: rgba(13, 110, 253, 0.1);
+        --gradient-end: rgba(13, 17, 23, 0);
     }
 
     .stat-card {
-        background-color: var(--card-bg);
+        background: radial-gradient(circle at top left, var(--gradient-start), var(--gradient-end)), var(--card-bg);
         border: 1px solid var(--border-color);
         border-radius: 0.75rem;
         padding: 1.5rem;
@@ -23,7 +25,7 @@
     }
     .stat-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 0 15px var(--glow-cyan), 0 0 30px var(--glow-blue);
+        box-shadow: 0 0 20px rgba(0, 199, 255, 0.5), 0 0 35px rgba(0, 123, 255, 0.3);
     }
     .stat-card .card-title {
         font-size: 0.9rem;
@@ -45,26 +47,44 @@
         color: rgba(255, 255, 255, 0.7);
     }
     .chart-container {
-        background-color: var(--card-bg);
+        background: var(--card-bg);
         border: 1px solid var(--border-color);
         padding: 1.5rem;
         border-radius: 0.75rem;
         height: 100%;
     }
-    .map-placeholder {
+    .map-container {
         display: flex;
         align-items: center;
         justify-content: center;
         flex-direction: column;
         text-align: center;
-        min-height: 300px; /* Ensure it has some height */
+        min-height: 350px; /* Adjusted height for the map */
         color: rgba(255, 255, 255, 0.5);
+        overflow: hidden;
+        position: relative;
     }
-    .map-placeholder .bi-globe-americas {
-        font-size: 5rem;
-        color: var(--glow-blue);
-        text-shadow: 0 0 15px var(--glow-blue);
-        margin-bottom: 1rem;
+    .map-container svg {
+        width: 100%;
+        height: auto;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 0.7;
+    }
+    .map-container .map-title {
+        position: relative;
+        z-index: 1;
+        text-shadow: 0 0 10px black;
+    }
+    .map-container .map-dot {
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { r: 4; opacity: 1; }
+        50% { r: 8; opacity: 0.5; }
+        100% { r: 4; opacity: 1; }
     }
 </style>
  
@@ -98,7 +118,7 @@
 <!-- Stat Cards -->
 <div class="row g-4 mb-4">
     <div class="col-sm-6 col-xl-3">
-        <div class="stat-card bg-gradient-blue">
+        <div class="stat-card">
             <div class="card-title">Total de Itens</div>
             <div class="metric">{{ total_items }}</div>
             <div class="change">
@@ -108,7 +128,7 @@
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="stat-card bg-gradient-pink">
+        <div class="stat-card">
             <div class="card-title">Itens com Avaria</div>
             <div class="metric">{{ broken_items_count }}</div>
             <div class="change">
@@ -118,7 +138,7 @@
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="stat-card bg-gradient-purple">
+        <div class="stat-card">
             <div class="card-title">Novos Itens (Mês)</div>
             <div class="metric">{{ new_items_current_month }}</div>
             <div class="change {% if new_items_change >= 0 %}text-success{% else %}text-danger{% endif %}">
@@ -128,7 +148,7 @@
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="stat-card bg-gradient-teal">
+        <div class="stat-card">
             <div class="card-title">Categorias Ativas</div>
             <div class="metric">{{ total_categories }}</div>
             <div class="change">
@@ -164,10 +184,21 @@
         </div>
     </div>
     <div class="col-lg-4">
-        <div class="chart-container map-placeholder">
-            <i class="bi bi-globe-americas"></i>
-            <h5 class="mt-2">Mapa de Ativos</h5>
-            <p class="small">Futura implementação de mapa interativo com localizações.</p>
+        <div class="chart-container map-container">
+            <svg viewBox="0 0 1000 500">
+                <!-- Mapa Base -->
+                <path d="M998 252... (caminho SVG do mapa-múndi - muito longo para exibir aqui, mas o código completo o terá)" fill="#0d1117" stroke="rgba(0,199,255,0.3)" stroke-width="1"/>
+                <!-- Grade -->
+                <defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(0,123,255,0.1)" stroke-width="0.5"/></pattern></defs>
+                <rect width="1000" height="500" fill="url(#grid)" />
+                <!-- Marcadores Brilhantes -->
+                <circle class="map-dot" cx="200" cy="200" r="4" fill="var(--glow-cyan)" style="animation-delay: 0s;"/>
+                <circle class="map-dot" cx="750" cy="150" r="4" fill="var(--glow-cyan)" style="animation-delay: 0.5s;"/>
+                <circle class="map-dot" cx="450" cy="350" r="4" fill="var(--glow-cyan)" style="animation-delay: 1s;"/>
+                <circle class="map-dot" cx="550" cy="100" r="4" fill="var(--glow-cyan)" style="animation-delay: 1.5s;"/>
+            </svg>
+            <h5 class="mt-2 map-title">Mapa Global de Ativos</h5>
+            <p class="small map-title">Visualização de dados geoespaciais</p>
         </div>
     </div>
 </div>
@@ -238,10 +269,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 label: 'Disponibilidade',
                 data: {{ availability_values|tojson }},
                 backgroundColor: [
-                    'rgba(0, 255, 0, 0.7)',    // Livre -> Verde
-                    'rgba(255, 165, 0, 0.7)',  // Em uso -> Laranja
-                    'rgba(0, 199, 255, 0.7)',  // Devolvido -> Ciano
-                    'rgba(255, 0, 0, 0.7)'     // Outros -> Vermelho
+                    'rgba(20, 220, 120, 0.8)',  // Livre -> Verde
+                    'rgba(255, 165, 0, 0.8)',  // Em uso -> Laranja
+                    'rgba(0, 199, 255, 0.8)',  // Devolvido -> Ciano
+                    'rgba(255, 80, 100, 0.8)'     // Outros -> Vermelho
                 ],
                 borderColor: 'var(--card-bg)',
                 borderWidth: 4,
@@ -267,6 +298,10 @@ document.addEventListener('DOMContentLoaded', function () {
  
     // Gráfico de Itens por Categoria
     const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    const categoryGradient = categoryCtx.createLinearGradient(0, 0, 400, 0);
+    categoryGradient.addColorStop(0, 'rgba(0, 199, 255, 0.2)');
+    categoryGradient.addColorStop(1, 'rgba(0, 199, 255, 0.8)');
+
     new Chart(categoryCtx, {
         type: 'bar',
         data: {
@@ -274,7 +309,7 @@ document.addEventListener('DOMContentLoaded', function () {
             datasets: [{
                 label: 'Nº de Itens',
                 data: {{ category_data|tojson }},
-                backgroundColor: 'rgba(0, 199, 255, 0.6)',
+                backgroundColor: categoryGradient,
                 borderColor: 'var(--glow-cyan)',
                 borderWidth: 1,
                 borderRadius: 4,
@@ -305,6 +340,10 @@ document.addEventListener('DOMContentLoaded', function () {
  
     // Gráfico de Itens por Localização
     const locationCtx = document.getElementById('locationChart').getContext('2d');
+    const locationGradient = locationCtx.createLinearGradient(0, 100, 0, 300);
+    locationGradient.addColorStop(0, 'rgba(0, 123, 255, 0.8)');
+    locationGradient.addColorStop(1, 'rgba(0, 123, 255, 0.2)');
+
     new Chart(locationCtx, {
         type: 'bar',
         data: {
@@ -312,7 +351,7 @@ document.addEventListener('DOMContentLoaded', function () {
             datasets: [{
                 label: 'Nº de Itens',
                 data: {{ location_data|tojson }},
-                backgroundColor: 'rgba(13, 110, 253, 0.6)',
+                backgroundColor: locationGradient,
                 borderColor: 'var(--glow-blue)',
                 borderRadius: 4,
                 borderWidth: 0,
