@@ -1,111 +1,77 @@
 {% extends 'base.html' %}
 
 {% block title %}Dashboard{% endblock %}
-
+ 
 {% block content %}
 <style>
+    :root {
+        --glow-cyan: #00cfff;
+        --glow-blue: #0d6efd;
+        --dark-bg: #010409;
+        --card-bg: #0d1117;
+        --border-color: rgba(0, 199, 255, 0.2);
+    }
+
     .stat-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
         border-radius: 0.75rem;
         padding: 1.5rem;
         color: #fff;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        position: relative;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
         height: 100%;
     }
     .stat-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 0 15px var(--glow-cyan), 0 0 30px var(--glow-blue);
     }
-    /* Paleta de gradientes em tons de azul */
-    .bg-gradient-teal { background: linear-gradient(45deg, #0d6efd, #4ea7dea1); } /* Light Blue */
-    .bg-gradient-pink { background: linear-gradient(45deg, #0d6efd, #4ea7de98); } /* Dark Blue */
-    .bg-gradient-purple { background: linear-gradient(45deg, #0d6efd, #4ea7de91); } /* Electric Blue */
-    .bg-gradient-blue { background: linear-gradient(45deg, #0d6efd, #4ea7de9a); } /* Primary Blue */
-
     .stat-card .card-title {
         font-size: 0.9rem;
         font-weight: 500;
         color: rgba(255, 255, 255, 0.8);
         margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
     .stat-card .metric {
         font-size: 2.5rem;
         font-weight: 700;
         line-height: 1.2;
+        color: var(--glow-cyan);
+        text-shadow: 0 0 8px rgba(0, 199, 255, 0.7);
     }
     .stat-card .change {
         font-size: 0.85rem;
         color: rgba(255, 255, 255, 0.7);
     }
-
-    .stat-card .icon {
-        font-size: 4rem;
-        position: absolute;
-        right: 1rem;
-        bottom: -0.5rem;
-        opacity: 0.07;
-    }
     .chart-container {
-        background-color: #2c3034; /* Um cinza um pouco mais claro que o fundo */
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
         padding: 1.5rem;
         border-radius: 0.75rem;
+        height: 100%;
     }
-
-    /* Custom styles for Flatpickr to match dark theme */
-    #dashboardCalendar {
-        background-color: #343a40; /* Darker input background */
-        color: #fff; /* White text */
-        border-color: #495057; /* Darker border */
+    .map-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        text-align: center;
+        min-height: 300px; /* Ensure it has some height */
+        color: rgba(255, 255, 255, 0.5);
     }
-    #dashboardCalendar:focus {
-        background-color: #343a40;
-        color: #fff;
-        border-color: #0dcaf0; /* Teal accent on focus */
-        box-shadow: 0 0 0 0.25rem rgba(13, 202, 240, 0.25);
-    }
-    /* Flatpickr specific overrides for better dark theme integration */
-    .flatpickr-calendar {
-        background-color: #2c3034; /* Same as chart-container */
-        border: 1px solid #343a40;
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
-    }
-    .flatpickr-day.selected, .flatpickr-day.selected:hover, .flatpickr-day.startRange, .flatpickr-day.startRange:hover, .flatpickr-day.endRange, .flatpickr-day.endRange:hover {
-        background: linear-gradient(45deg, #0dcaf0, #0d6efd); /* Teal/Blue gradient for selected */
-        border-color: #0dcaf0;
-    }
-    .flatpickr-day.today:not(.selected) {
-        border-color: #6f42c1; /* Purple for today */
-    }
-    .flatpickr-day.today:not(.selected):hover {
-        background-color: rgba(111, 66, 193, 0.2);
-    }
-    .flatpickr-day.inRange {
-        background-color: rgba(13, 202, 240, 0.1);
-        border-color: rgba(13, 202, 240, 0.1);
-    }
-    .flatpickr-day.flatpickr-disabled, .flatpickr-day.flatpickr-disabled:hover {
-        color: rgba(255, 255, 255, 0.3);
-    }
-    .flatpickr-current-month .flatpickr-monthDropdown-months .flatpickr-month,
-    .flatpickr-current-month .flatpickr-numInputWrapper .numInput.flatpickr-year,
-    .flatpickr-current-month .flatpickr-numInputWrapper .numInput.flatpickr-month {
-        color: #fff;
-    }
-    .flatpickr-months .flatpickr-prev-month, .flatpickr-months .flatpickr-next-month {
-        color: #fff;
-    }
-    .flatpickr-months .flatpickr-prev-month:hover, .flatpickr-months .flatpickr-next-month:hover {
-        color: #0dcaf0;
-    }
-    .flatpickr-weekday {
-        color: rgba(255, 255, 255, 0.7);
+    .map-placeholder .bi-globe-americas {
+        font-size: 5rem;
+        color: var(--glow-blue);
+        text-shadow: 0 0 15px var(--glow-blue);
+        margin-bottom: 1rem;
     }
 </style>
-
+ 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Dashboard</h1>
 </div>
-
+ 
 <!-- Alertas de Estoque Baixo (Apenas para Admins) -->
 {% if g.user['role'] == 'admin' and low_stock_categories %}
 <div class="row mb-4">
@@ -128,10 +94,10 @@
     </div>
 </div>
 {% endif %}
-
+ 
 <!-- Stat Cards -->
 <div class="row g-4 mb-4">
-    <div class="col-md-6 col-xl-3">
+    <div class="col-sm-6 col-xl-3">
         <div class="stat-card bg-gradient-blue">
             <div class="card-title">Total de Itens</div>
             <div class="metric">{{ total_items }}</div>
@@ -141,7 +107,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-3">
+    <div class="col-sm-6 col-xl-3">
         <div class="stat-card bg-gradient-pink">
             <div class="card-title">Itens com Avaria</div>
             <div class="metric">{{ broken_items_count }}</div>
@@ -151,7 +117,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-3">
+    <div class="col-sm-6 col-xl-3">
         <div class="stat-card bg-gradient-purple">
             <div class="card-title">Novos Itens (Mês)</div>
             <div class="metric">{{ new_items_current_month }}</div>
@@ -161,7 +127,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-3">
+    <div class="col-sm-6 col-xl-3">
         <div class="stat-card bg-gradient-teal">
             <div class="card-title">Categorias Ativas</div>
             <div class="metric">{{ total_categories }}</div>
@@ -171,51 +137,56 @@
         </div>
     </div>
 </div>
-
+ 
 <!-- Gráficos -->
 <div class="row g-4">
     <!-- Gráfico de Linha -->
-    <div class="col-12">
+    <div class="col-xl-8">
         <div class="chart-container">
             <canvas id="monthlyItemsChart"></canvas>
         </div>
     </div>
-    <!-- Gráficos de Barra -->
-    <div class="col-lg-6">
+    <!-- Gráfico de Rosca -->
+    <div class="col-xl-4">
+        <div class="chart-container">
+            <canvas id="availabilityDonutChart"></canvas>
+        </div>
+    </div>
+    <!-- Gráficos de Barra e Mapa -->
+    <div class="col-lg-4">
         <div class="chart-container">
             <canvas id="categoryChart"></canvas>
         </div>
     </div>
-    <div class="col-lg-6">
+    <div class="col-lg-4">
         <div class="chart-container">
             <canvas id="locationChart"></canvas>
         </div>
     </div>
+    <div class="col-lg-4">
+        <div class="chart-container map-placeholder">
+            <i class="bi bi-globe-americas"></i>
+            <h5 class="mt-2">Mapa de Ativos</h5>
+            <p class="small">Futura implementação de mapa interativo com localizações.</p>
+        </div>
+    </div>
 </div>
-
+ 
 <!-- Inclui a biblioteca Chart.js -->
-<!-- Adiciona os arquivos JS do Flatpickr -->
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+ 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     // Configurações globais para os gráficos no tema escuro
     Chart.defaults.color = 'rgba(255, 255, 255, 0.7)';
-
-    // Função para criar gradientes para os gráficos
-    function createGradient(ctx, colorStart, colorEnd) {
-        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, colorStart);
-        gradient.addColorStop(1, colorEnd);
-        return gradient;
-    }
-
+    Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+ 
     // Gráfico de Linha de Itens por Mês
     const monthlyCtx = document.getElementById('monthlyItemsChart').getContext('2d');
-    const monthlyGradient = createGradient(monthlyCtx, 'rgba(13, 110, 253, 0.4)', 'rgba(13, 202, 240, 0.05)');
-
+    const monthlyGradient = monthlyCtx.createLinearGradient(0, 0, 0, 400);
+    monthlyGradient.addColorStop(0, 'rgba(0, 199, 255, 0.5)');
+    monthlyGradient.addColorStop(1, 'rgba(13, 110, 253, 0.05)');
+ 
     new Chart(monthlyCtx, {
         type: 'line',
         data: {
@@ -224,15 +195,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 label: 'Itens Adicionados',
                 data: {{ monthly_data|tojson }},
                 fill: true,
-                backgroundColor: monthlyGradient,
-                borderColor: '#0dcaf0', // Teal line
+                backgroundColor: monthlyGradient, 
+                borderColor: 'var(--glow-cyan)',
                 pointBackgroundColor: '#fff',
-                pointBorderColor: '#0dcaf0',
-                pointRadius: 4, // Make points slightly more prominent
-                pointHoverRadius: 7, // Enlarge points on hover
-                pointHoverBackgroundColor: '#0dcaf0', // Fill point with color on hover
-                pointHoverBorderColor: '#fff', // White border on hover
-                tension: 0.4 // A slightly more gentle curve
+                pointBorderColor: 'var(--glow-cyan)',
+                pointRadius: 4,
+                pointHoverRadius: 7,
+                pointHoverBackgroundColor: 'var(--glow-cyan)',
+                pointHoverBorderColor: '#fff',
+                tension: 0.4
             }]
         },
         options: {
@@ -248,24 +219,54 @@ document.addEventListener('DOMContentLoaded', function () {
                     displayColors: false
                 },
                 legend: { display: false },
-                title: {
-                    display: true,
-                    text: 'Itens Adicionados nos Últimos 12 Meses',
-                    font: { size: 16 }
-                }
+                title: { display: true, text: 'Itens Adicionados nos Últimos 12 Meses', font: { size: 16 } }
             },
             scales: {
-                // ... existing scales ...
-                y: { grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                y: { grid: { color: Chart.defaults.borderColor } },
                 x: { grid: { display: false } }
             }
         }
     });
-
+ 
+    // Gráfico de Rosca de Disponibilidade
+    const availabilityCtx = document.getElementById('availabilityDonutChart').getContext('2d');
+    new Chart(availabilityCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ availability_labels|tojson }},
+            datasets: [{
+                label: 'Disponibilidade',
+                data: {{ availability_values|tojson }},
+                backgroundColor: [
+                    'rgba(0, 255, 0, 0.7)',    // Livre -> Verde
+                    'rgba(255, 165, 0, 0.7)',  // Em uso -> Laranja
+                    'rgba(0, 199, 255, 0.7)',  // Devolvido -> Ciano
+                    'rgba(255, 0, 0, 0.7)'     // Outros -> Vermelho
+                ],
+                borderColor: 'var(--card-bg)',
+                borderWidth: 4,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            cutout: '70%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        boxWidth: 12
+                    }
+                },
+                title: { display: true, text: 'Disponibilidade dos Itens', font: { size: 16 } },
+                tooltip: { displayColors: false }
+            }
+        }
+    });
+ 
     // Gráfico de Itens por Categoria
     const categoryCtx = document.getElementById('categoryChart').getContext('2d');
-    const categoryGradient = createGradient(categoryCtx, 'rgba(32, 201, 151, 0.7)', 'rgba(23, 162, 184, 0.7)');
-
     new Chart(categoryCtx, {
         type: 'bar',
         data: {
@@ -273,8 +274,10 @@ document.addEventListener('DOMContentLoaded', function () {
             datasets: [{
                 label: 'Nº de Itens',
                 data: {{ category_data|tojson }},
-                backgroundColor: categoryGradient,
-                borderRadius: 4, // Add rounded corners for a softer look
+                backgroundColor: 'rgba(0, 199, 255, 0.6)',
+                borderColor: 'var(--glow-cyan)',
+                borderWidth: 1,
+                borderRadius: 4,
                 borderWidth: 0,
                 hoverBorderWidth: 2,
                 hoverBorderColor: '#fff'
@@ -282,24 +285,13 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         options: {
             responsive: true,
+            indexAxis: 'y', // Barras horizontais
             plugins: {
-                tooltip: {
-                    enabled: true,
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    titleFont: { size: 14, weight: 'bold' },
-                    bodyFont: { size: 12 },
-                    padding: 10,
-                    cornerRadius: 4,
-                    displayColors: false
-                },
                 legend: { display: false },
-                title: {
-                    display: true,
-                    text: 'Top 10 Categorias de Itens',
-                    font: { size: 16 }
-                }
+                title: { display: true, text: 'Itens por Categoria', font: { size: 16 } },
+                tooltip: { displayColors: false }
             },
-            scales: { 
+            scales: {
                 y: { 
                     beginAtZero: true,
                     grid: { color: 'rgba(255, 255, 255, 0.1)' }
@@ -310,11 +302,9 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     });
-
+ 
     // Gráfico de Itens por Localização
     const locationCtx = document.getElementById('locationChart').getContext('2d');
-    const locationGradient = createGradient(locationCtx, 'rgba(214, 51, 132, 0.7)', 'rgba(111, 66, 193, 0.7)');
-
     new Chart(locationCtx, {
         type: 'bar',
         data: {
@@ -322,8 +312,9 @@ document.addEventListener('DOMContentLoaded', function () {
             datasets: [{
                 label: 'Nº de Itens',
                 data: {{ location_data|tojson }},
-                backgroundColor: locationGradient,
-                borderRadius: 4, // Add rounded corners for a softer look
+                backgroundColor: 'rgba(13, 110, 253, 0.6)',
+                borderColor: 'var(--glow-blue)',
+                borderRadius: 4,
                 borderWidth: 0,
                 hoverBorderWidth: 2,
                 hoverBorderColor: '#fff'
@@ -331,25 +322,12 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         options: {
             responsive: true,
-            indexAxis: 'y', // Transforma em gráfico de barras horizontais
             plugins: {
-                tooltip: {
-                    enabled: true,
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    titleFont: { size: 14, weight: 'bold' },
-                    bodyFont: { size: 12 },
-                    padding: 10,
-                    cornerRadius: 4,
-                    displayColors: false
-                },
                 legend: { display: false },
-                title: {
-                    display: true,
-                    text: 'Top 10 Localizações de Itens',
-                    font: { size: 16 }
-                }
+                title: { display: true, text: 'Itens por Localização', font: { size: 16 } },
+                tooltip: { displayColors: false }
             },
-            scales: { 
+            scales: {
                 x: { 
                     beginAtZero: true,
                     grid: { color: 'rgba(255, 255, 255, 0.1)' }
@@ -362,4 +340,5 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+ 
 {% endblock %}

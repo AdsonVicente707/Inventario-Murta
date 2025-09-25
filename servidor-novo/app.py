@@ -254,6 +254,17 @@ def dashboard():
     # Total de categorias distintas
     total_categories = db.execute('SELECT COUNT(DISTINCT category) FROM items WHERE category IS NOT NULL AND category != ""').fetchone()[0]
 
+    # --- Query para Gráfico de Rosca (Disponibilidade) ---
+    availability_cursor = db.execute("""
+        SELECT availability_status, COUNT(id) as count 
+        FROM items 
+        WHERE availability_status IS NOT NULL AND availability_status != '' 
+        GROUP BY availability_status
+    """)
+    availability_data = availability_cursor.fetchall()
+    availability_labels = [row['availability_status'] for row in availability_data]
+    availability_values = [row['count'] for row in availability_data]
+
     return render_template('dashboard.html', 
                            total_items=total_items,
                            broken_items_count=broken_items_count,
@@ -262,7 +273,7 @@ def dashboard():
                            new_items_change=new_items_change,
                            total_categories=total_categories,
                            location_labels=location_labels, location_data=location_data,
-                           category_labels=category_labels, category_data=category_data,
+                           category_labels=category_labels, category_data=category_data,                           availability_labels=availability_labels, availability_values=availability_values,
                            monthly_labels=monthly_labels, monthly_data=monthly_data,
                            low_stock_categories=[])
 
