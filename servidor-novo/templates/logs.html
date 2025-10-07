@@ -3,51 +3,67 @@
 {% block title %}Log de Atividades{% endblock %}
 
 {% block content %}
-    <div class="bg-light text-dark p-4 rounded shadow-sm">
-        <h1>Log de Atividades</h1>
-        <hr>
-        <div class="table-responsive">
-            <!-- Adicionada a classe 'table-bordered' para se assemelhar ao Excel -->
-            <table class="table table-striped table-hover table-bordered">
-                <thead class="table-secondary">
-                    <tr>
-                        <th>Usuário</th>
-                        <th>Ação</th>
-                        <th>Item</th>
-                        <th>Data e Hora</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for log in log_entries %}
+<style>
+    /* Reutilizando estilos do index.html para consistência */
+    .table-container {
+
+        background-color: #0c0c0cf5;
+        background-color: transparent;
+        padding: 2rem;
+        border-radius: 0.75rem;
+    }
+    .table-futuristic {
+        border-collapse: collapse;
+        width: 100%;
+        color: #00cfff;
+    }
+    .table-futuristic thead th {
+        border: none;
+        border-bottom: 1px solid #efeaf3ff;
+        color: #f5f2f8ff;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 1px;
+        padding: 1rem;
+    }
+    .table-futuristic td {
+        border: none;
+        border-bottom: 1px solid #333;
+        vertical-align: middle;
+        padding: 1rem;
+    }
+</style>
+
+<div class="table-container">
+    <h1 class="mb-4">Log de Atividades</h1>
+
+    <div class="table-responsive">
+        <table class="table table-futuristic">
+            <thead>
                 <tr>
-                    <td>{{ log['username'] }}</td>
-                    <td>{{ log['action'] }}</td>
-                    <td>
-                        {% if log['item_id'] and log['item_name'] %}
-                            "{{ log['item_name'] }}" (ID: {{ log['item_id'] }})
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                    <td>{{ log['timestamp'] }}</td>
+                    <th>Data/Hora</th>
+                    <th>Usuário</th>
+                    <th>Ação</th>
+                    <th>Item Afetado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in log_entries %}
+                <tr>
+                    <td>{{ entry.timestamp.split('.')[0] }}</td>
+                    <td>{{ entry.username }}</td>
+                    <td>{{ entry.action }}</td>
+                    <td>{{ entry.item_name or 'N/A' }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="4" class="text-center">Nenhum registro no log.</td>
+                    <td colspan="4" class="text-center">Nenhum registro de log encontrado.</td>
                 </tr>
                 {% endfor %}
-                </tbody>
-            </table>
-        </div>
+            </tbody>
+        </table>
     </div>
 
-    {% if total_pages > 1 %}
-    <nav aria-label="Paginação do log" class="mt-4">
-        <ul class="pagination justify-content-center">
-            <li class="page-item {% if page <= 1 %}disabled{% endif %}"><a class="page-link" href="{{ url_for('logs', page=page-1) }}">Anterior</a></li>
-            {% for p in range(1, total_pages + 1) %}<li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="{{ url_for('logs', page=p) }}">{{ p }}</a></li>{% endfor %}
-            <li class="page-item {% if page >= total_pages %}disabled{% endif %}"><a class="page-link" href="{{ url_for('logs', page=page+1) }}">Próxima</a></li>
-        </ul>
-    </nav>
-    {% endif %}
+    <!-- Aqui você pode adicionar a lógica de paginação se necessário, similar ao index.html -->
+</div>
 {% endblock %}

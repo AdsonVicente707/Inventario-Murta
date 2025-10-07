@@ -1,6 +1,6 @@
-import sqlite3
 import functools
 import os
+import mysql.connector
 
 # --- CORREÇÃO PARA WEASYPRINT NO WINDOWS ---
 # Adiciona o diretório de bibliotecas do MSYS2/MinGW64 ao caminho de busca de DLLs.
@@ -20,6 +20,7 @@ from flask import Flask, render_template, request, redirect, url_for, g, abort, 
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import math
+import uuid
 import csv
 import io
 from datetime import datetime, date, timedelta
@@ -30,6 +31,14 @@ app = Flask(__name__)
 # Mude para um valor aleatório e complexo em produção!
 app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-forte-e-dificil-de-adivinhar'
 
+# --- Configuração do Banco de Dados MySQL ---
+# **IMPORTANTE**: Substitua com suas credenciais do MySQL.
+app.config['MYSQL_HOST'] = 'localhost'
+app.config['MYSQL_USER'] = 'root' # <-- COLOQUE SEU USUÁRIO REAL DO MYSQL AQUI
+app.config['MYSQL_PASSWORD'] = 'sua_senha_real' # <-- COLOQUE SUA SENHA REAL DO MYSQL AQUI
+app.config['MYSQL_DB'] = 'inventory_db'
+app.config['MYSQL_CURSORCLASS'] = 'DictCursor' # Retorna linhas como dicionários
+
 # --- Configuração para upload de arquivos ---
 UPLOAD_FOLDER = 'uploads'
 PROFILE_PICS_FOLDER = os.path.join(UPLOAD_FOLDER, 'profile_pics')
@@ -37,7 +46,6 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 # --- CORREÇÃO: Define o caminho absoluto para o banco de dados ---
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['DATABASE'] = os.path.join(basedir, 'inventory.db')
 app.config['UPLOAD_FOLDER'] = os.path.join(basedir, UPLOAD_FOLDER)
 app.config['PROFILE_PICS_FOLDER'] = os.path.join(basedir, PROFILE_PICS_FOLDER)
 
@@ -53,9 +61,12 @@ def get_db():
     """Abre uma nova conexão com o banco de dados se não houver uma no contexto."""
     db = getattr(g, '_database', None)
     if db is None:
-        db = g._database = sqlite3.connect(app.config['DATABASE'])
-        # Retorna linhas como dicionários
-        db.row_factory = sqlite3.Row
+        db = g._database = mysql.connector.connect(
+            host=app.config['MYSQL_HOST'],
+            user=app.config['MYSQL_USER'],
+            password=app.config['MYSQL_PASSWORD'],
+            database=app.config['MYSQL_DB']
+        )
     return db
 
 @app.teardown_appcontext
@@ -71,7 +82,9 @@ def inject_categories():
     if g.user:
         db = get_db()
         # Pega categorias distintas que não sejam nulas ou vazias
-        categories = db.execute('SELECT DISTINCT category FROM items WHERE category IS NOT NULL AND category != "" ORDER BY category').fetchall()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute('SELECT DISTINCT category FROM items WHERE category IS NOT NULL AND category != "" ORDER BY category')
+        categories = cursor.fetchall()
         return dict(all_categories=categories)
     return dict(all_categories=[], notifications=[])
 
@@ -79,7 +92,9 @@ def inject_categories():
 def inject_notifications():
     if g.user:
         db = get_db()
-        notifications = db.execute('SELECT * FROM notifications WHERE user_id = ? AND is_read = 0 ORDER BY created_at DESC', (g.user['id'],)).fetchall()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute('SELECT * FROM notifications WHERE user_id = %s AND is_read = 0 ORDER BY created_at DESC', (g.user['id'],))
+        notifications = cursor.fetchall()
         return dict(notifications=notifications)
     return dict(notifications=[])
 
@@ -90,9 +105,9 @@ def load_logged_in_user():
     if user_id is None:
         g.user = None
     else:
-        g.user = get_db().execute(
-            'SELECT * FROM users WHERE id = ?', (user_id,)
-        ).fetchone()
+        cursor = get_db().cursor(dictionary=True)
+        cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))
+        g.user = cursor.fetchone()
 
 def login_required(view):
     """Decorator que redireciona usuários anônimos para a página de login."""
@@ -117,28 +132,33 @@ def admin_required(view):
 def log_activity(db, action, item_id=None, item_name=None):
     """Registra uma ação no log de atividades."""
     if g.user:
-        db.execute(
-            'INSERT INTO activity_log (user_id, username, action, item_id, item_name) VALUES (?, ?, ?, ?, ?)',
+        cursor = db.cursor()
+        cursor.execute(
+            'INSERT INTO activity_log (user_id, username, action, item_id, item_name) VALUES (%s, %s, %s, %s, %s)',
             (g.user['id'], g.user['username'], action, item_id, item_name)
         )
 
-def log_status_change(db, item_id, item_name, old_status, new_status, notes=None):
-    """Registra uma mudança de status no histórico."""
+def log_change(db, item_id, item_name, change_type, old_value, new_value, notes=None):
+    """Registra uma mudança (status, atribuição, etc.) no histórico do item."""
     if g.user:
-        db.execute(
-            'INSERT INTO status_history (item_id, item_name, old_status, new_status, notes, changed_by_user_id, changed_by_username) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (item_id, item_name, old_status, new_status, notes, g.user['id'], g.user['username'])
+        cursor = db.cursor()
+        cursor.execute(
+            'INSERT INTO status_history (item_id, item_name, change_type, old_value, new_value, notes, changed_by_user_id, changed_by_username) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
+            (item_id, item_name, change_type, old_value, new_value, notes, g.user['id'], g.user['username'])
         )
         # O commit será feito junto com a operação principal (add/edit)
 
 def notify_admins(db, message, link):
     """Cria uma notificação para todos os administradores."""
-    admins = db.execute('SELECT id FROM users WHERE role = ?', ('admin',)).fetchall()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute('SELECT id FROM users WHERE role = %s', ('admin',))
+    admins = cursor.fetchall()
     for admin in admins:
-        db.execute(
-            "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
+        cursor.execute(
+            "INSERT INTO notifications (user_id, message, link) VALUES (%s, %s, %s)",
             (admin['id'], message, link)
         )
+    cursor.close()
 
 def check_and_notify_stock_level(db, category_name):
     """Verifica o nível de estoque de uma categoria e notifica admins se estiver baixo."""
@@ -146,22 +166,26 @@ def check_and_notify_stock_level(db, category_name):
         return
 
     # 1. Pega a configuração de estoque mínimo para a categoria
-    setting = db.execute(
-        'SELECT min_stock_level FROM category_stock_settings WHERE category_name = ?',
+    cursor = db.cursor(dictionary=True)
+    cursor.execute(
+        'SELECT min_stock_level FROM category_stock_settings WHERE category_name = %s',
         (category_name,)
-    ).fetchone()
+    )
+    setting = cursor.fetchone()
 
     # Se não há configuração para esta categoria, não faz nada
     if not setting or setting['min_stock_level'] <= 0:
+        cursor.close()
         return
 
     min_level = setting['min_stock_level']
 
     # 2. Conta quantos itens "Livres" existem para essa categoria
-    current_stock = db.execute(
-        "SELECT COUNT(id) FROM items WHERE category = ? AND availability_status = 'Livre'",
+    cursor.execute(
+        "SELECT COUNT(id) as count FROM items WHERE category = %s AND availability_status = 'Livre'",
         (category_name,)
-    ).fetchone()[0]
+    )
+    current_stock = cursor.fetchone()['count']
 
     # 3. Se o estoque atual está abaixo do mínimo, notifica os admins
     if current_stock < min_level:
@@ -169,15 +193,71 @@ def check_and_notify_stock_level(db, category_name):
         link = url_for('index', category=category_name)
         notify_admins(db, message, link)
 
+    cursor.close()
+
 def get_item(item_id):
     """Busca um único item pelo seu ID."""
     db = get_db()
-    item = db.execute(
-        'SELECT * FROM items WHERE id = ?', (item_id,)
-    ).fetchone()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute('SELECT * FROM items WHERE id = %s', (item_id,))
+    item = cursor.fetchone()
     if item is None:
+        cursor.close()
         abort(404) # Se o item não existir, retorna um erro "Not Found".
     return item
+
+@app.route('/item/qrcode/<item_uuid>')
+@login_required
+def generate_qrcode(item_uuid):
+    """Gera e serve uma imagem de QR Code para o UUID de um item."""
+    import qrcode
+    from io import BytesIO
+
+    # Gera a URL completa para a página de edição do item
+    # O UUID é usado para encontrar o item, mas o QR code aponta para a URL com ID
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute('SELECT id FROM items WHERE item_uuid = %s', (item_uuid,))
+    item = cursor.fetchone()
+    if not item:
+        abort(404)
+    
+    item_url = url_for('edit', id=item['id'], _external=True)
+    qr_img = qrcode.make(item_url)
+    
+    img_io = BytesIO()
+    qr_img.save(img_io, 'PNG')
+    img_io.seek(0)
+    
+    return send_file(img_io, mimetype='image/png')
+
+@app.route('/item/<int:id>/label')
+@login_required
+def generate_label(id):
+    """Gera uma página de etiqueta para impressão para um item específico."""
+    item = get_item(id)
+    return render_template('label_template.html', item=item)
+
+@app.route('/labels/multiple', methods=['POST'])
+@admin_required
+def generate_multiple_labels():
+    """Gera uma página com múltiplas etiquetas para impressão."""
+    item_ids = request.form.getlist('item_ids')
+    if not item_ids:
+        flash('Nenhum item foi selecionado para impressão.', 'warning')
+        return redirect(url_for('index'))
+
+    db = get_db()
+    # Cria uma string de placeholders (?,?,?) para a consulta SQL
+    placeholders = ','.join(['%s'] * len(item_ids))
+    query = f"SELECT * FROM items WHERE id IN ({placeholders})"
+    
+    cursor = db.cursor(dictionary=True)
+    cursor.execute(query, tuple(item_ids))
+    items = cursor.fetchall()
+
+    return render_template('multiple_labels_template.html', items=items)
+
 
 @app.route('/uploads/<filename>')
 @login_required
@@ -196,21 +276,23 @@ def dashboard():
     db = get_db()
     from collections import OrderedDict
     
-    total_items = db.execute('SELECT COUNT(id) FROM items').fetchone()[0]
+    cursor = db.cursor(dictionary=True)
+    cursor.execute('SELECT COUNT(id) as count FROM items')
+    total_items = cursor.fetchone()['count']
 
     # Query para contar itens por setor (localização)
-    items_by_location_cursor = db.execute(
+    cursor.execute(
         'SELECT location, COUNT(id) as count FROM items WHERE location IS NOT NULL AND location != "" GROUP BY location ORDER BY count DESC LIMIT 10'
     )
-    items_by_location = items_by_location_cursor.fetchall()
+    items_by_location = cursor.fetchall()
     location_labels = [item['location'] for item in items_by_location]
     location_data = [item['count'] for item in items_by_location]
 
     # Query para contar itens por categoria
-    items_by_category_cursor = db.execute(
+    cursor.execute(
         'SELECT category, COUNT(id) as count FROM items WHERE category IS NOT NULL AND category != "" GROUP BY category ORDER BY count DESC LIMIT 10'
     )
-    items_by_category = items_by_category_cursor.fetchall()
+    items_by_category = cursor.fetchall()
     category_labels = [item['category'] for item in items_by_category]
     category_data = [item['count'] for item in items_by_category]
 
@@ -226,10 +308,10 @@ def dashboard():
             month += 12
         monthly_counts[f"{year:04d}-{month:02d}"] = 0
 
-    items_per_month_cursor = db.execute(
-        "SELECT strftime('%Y-%m', created_at) as month, COUNT(id) as count FROM items WHERE created_at >= date('now', '-1 year') GROUP BY month"
+    cursor.execute(
+        "SELECT DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(id) as count FROM items WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 YEAR) GROUP BY month"
     )
-    for row in items_per_month_cursor.fetchall():
+    for row in cursor.fetchall():
         if row['month'] in monthly_counts:
             monthly_counts[row['month']] = row['count']
             
@@ -241,7 +323,8 @@ def dashboard():
     broken_items_count = 0
     broken_items_percentage = 0
     if total_items > 0:
-        broken_items_count = db.execute('SELECT COUNT(id) FROM items WHERE status = ?', ('Quebrado',)).fetchone()[0]
+        cursor.execute('SELECT COUNT(id) as count FROM items WHERE status = %s', ('Quebrado',))
+        broken_items_count = cursor.fetchone()['count']
         broken_items_percentage = round((broken_items_count / total_items) * 100)
 
     # Novos itens este mês e mudança percentual em relação ao mês anterior
@@ -252,16 +335,17 @@ def dashboard():
         new_items_change = round(((new_items_current_month - new_items_last_month) / new_items_last_month) * 100)
 
     # Total de categorias distintas
-    total_categories = db.execute('SELECT COUNT(DISTINCT category) FROM items WHERE category IS NOT NULL AND category != ""').fetchone()[0]
+    cursor.execute('SELECT COUNT(DISTINCT category) as count FROM items WHERE category IS NOT NULL AND category != ""')
+    total_categories = cursor.fetchone()['count']
 
     # --- Query para Gráfico de Rosca (Disponibilidade) ---
-    availability_cursor = db.execute("""
+    cursor.execute("""
         SELECT availability_status, COUNT(id) as count 
         FROM items 
         WHERE availability_status IS NOT NULL AND availability_status != '' 
         GROUP BY availability_status
     """)
-    availability_data = availability_cursor.fetchall()
+    availability_data = cursor.fetchall()
     availability_labels = [row['availability_status'] for row in availability_data]
     availability_values = [row['count'] for row in availability_data]
 
@@ -282,6 +366,7 @@ def dashboard():
 def manage_categories():
     """Página para gerenciar (renomear e remover) categorias."""
     db = get_db()
+    cursor = db.cursor(dictionary=True)
     
     if request.method == 'POST':
         action = request.form.get('action')
@@ -291,16 +376,19 @@ def manage_categories():
             new_name = request.form['new_name'].strip()
             if new_name and old_name != new_name:
                 try:
+                    # Usar um novo cursor sem dicionário para operações de escrita
+                    write_cursor = db.cursor()
                     # Verifica se o novo nome de categoria já existe para evitar duplicatas
-                    exists = db.execute('SELECT 1 FROM items WHERE category = ?', (new_name,)).fetchone()
+                    write_cursor.execute('SELECT 1 FROM items WHERE category = %s', (new_name,))
+                    exists = write_cursor.fetchone()
                     if exists:
                         flash(f'A categoria "{new_name}" já existe. Escolha um nome diferente.', 'warning')
                     else:
-                        db.execute('UPDATE items SET category = ? WHERE category = ?', (new_name, old_name))
+                        write_cursor.execute('UPDATE items SET category = %s WHERE category = %s', (new_name, old_name))
                         log_activity(db, f'Renomeou categoria de "{old_name}" para "{new_name}"')
                         db.commit()
                         flash(f'Categoria "{old_name}" foi renomeada para "{new_name}".', 'success')
-                except sqlite3.Error as e:
+                except mysql.connector.Error as e:
                     db.rollback()
                     flash(f'Erro ao renomear categoria: {e}', 'danger')
             else:
@@ -309,18 +397,21 @@ def manage_categories():
         elif action == 'delete':
             name_to_delete = request.form['name_to_delete']
             try:
+                write_cursor = db.cursor()
                 # Esta ação remove a categoria dos itens, mas não exclui os itens.
-                db.execute('UPDATE items SET category = NULL WHERE category = ?', (name_to_delete,))
+                write_cursor.execute('UPDATE items SET category = NULL WHERE category = %s', (name_to_delete,))
                 log_activity(db, f'Removeu categoria "{name_to_delete}" dos itens.')
                 db.commit()
                 flash(f'Categoria "{name_to_delete}" foi removida de todos os itens associados.', 'info')
-            except sqlite3.Error as e:
+            except mysql.connector.Error as e:
                 db.rollback()
                 flash(f'Erro ao remover categoria: {e}', 'danger')
         
         return redirect(url_for('manage_categories'))
 
-    categories = db.execute('SELECT DISTINCT category FROM items WHERE category IS NOT NULL AND category != "" ORDER BY category').fetchall()
+    cursor.execute('SELECT DISTINCT category FROM items WHERE category IS NOT NULL AND category != "" ORDER BY category')
+    categories = cursor.fetchall()
+    cursor.close()
     return render_template('manage_categories.html', categories=categories)
 
 @app.route('/manage_users', methods=('GET', 'POST'))
@@ -328,6 +419,7 @@ def manage_categories():
 def manage_users():
     """Página para administradores gerenciarem os papéis dos usuários."""
     db = get_db()
+    cursor = db.cursor(dictionary=True)
 
     if request.method == 'POST':
         action = request.form.get('action')
@@ -342,15 +434,16 @@ def manage_users():
                 flash('Você não pode alterar seu próprio papel.', 'warning')
             else:
                 try:
-                    target_user = db.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+                    cursor.execute('SELECT username FROM users WHERE id = %s', (user_id,))
+                    target_user = cursor.fetchone()
                     if target_user:
-                        db.execute('UPDATE users SET role = ? WHERE id = ?', (new_role, user_id))
+                        cursor.execute('UPDATE users SET role = %s WHERE id = %s', (new_role, user_id))
                         log_activity(db, f"Alterou o papel do usuário '{target_user['username']}' para '{new_role}'")
                         db.commit()
                         flash(f"Papel do usuário '{target_user['username']}' atualizado para '{new_role}'.", 'success')
                     else:
                         flash('Usuário não encontrado.', 'danger')
-                except sqlite3.Error as e:
+                except mysql.connector.Error as e:
                     db.rollback()
                     flash(f'Erro ao atualizar o papel do usuário: {e}', 'danger')
         
@@ -368,14 +461,14 @@ def manage_users():
             
             if error is None:
                 try:
-                    db.execute(
-                        "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                    cursor.execute(
+                        "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)",
                         (username, generate_password_hash(password), role)
                     )
                     log_activity(db, f"Criou novo usuário '{username}' com papel '{role}'")
                     db.commit()
                     flash(f"Usuário '{username}' criado com sucesso.", 'success')
-                except db.IntegrityError:
+                except mysql.connector.IntegrityError:
                     error = f"Usuário '{username}' já existe."
             
             if error:
@@ -384,7 +477,9 @@ def manage_users():
         return redirect(url_for('manage_users'))
 
     # Busca todos os usuários para exibir na página
-    users = db.execute('SELECT id, username, role FROM users ORDER BY username').fetchall()
+    cursor.execute('SELECT id, username, role FROM users ORDER BY username')
+    users = cursor.fetchall()
+    cursor.close()
     return render_template('manage_users.html', users=users)
 
 @app.route('/user_assets')
@@ -392,12 +487,15 @@ def manage_users():
 def user_assets():
     """Página para administradores verem os itens associados a cada usuário."""
     db = get_db()
+    cursor = db.cursor(dictionary=True)
     
     # 1. Pega todos os usuários
-    users = db.execute("SELECT id, username FROM users ORDER BY username").fetchall()
+    cursor.execute("SELECT id, username FROM users ORDER BY username")
+    users = cursor.fetchall()
     
     # 2. Pega todos os itens que estão "Em uso"
-    items_in_use = db.execute("SELECT id, name, assigned_to FROM items WHERE availability_status = 'Em uso'").fetchall()
+    cursor.execute("SELECT id, name, assigned_to FROM items WHERE availability_status = 'Em uso'")
+    items_in_use = cursor.fetchall()
     
     # 3. Agrupa os itens por usuário em um dicionário
     assets_by_user = {user['username']: [] for user in users}
@@ -405,6 +503,7 @@ def user_assets():
         if item['assigned_to'] in assets_by_user:
             assets_by_user[item['assigned_to']].append(item)
             
+    cursor.close()
     return render_template('user_assets.html', assets_by_user=assets_by_user)
 
 @app.route('/')
@@ -418,29 +517,33 @@ def index():
     offset = (page - 1) * per_page
 
     db = get_db()
+    cursor = db.cursor(dictionary=True)
 
     # Parâmetros e cláusulas para a consulta SQL
     params = []
     where_clauses = []
 
     if category_filter:
-        where_clauses.append("category = ?")
+        where_clauses.append("category = %s")
         params.append(category_filter)
 
     if search_query:
         search_term = f"%{search_query}%"
-        where_clauses.append("(name LIKE ? OR model LIKE ? OR category LIKE ? OR location LIKE ?)")
+        where_clauses.append("(name LIKE %s OR model LIKE %s OR category LIKE %s OR location LIKE %s)")
         params.extend([search_term, search_term, search_term, search_term])
 
     where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
     # Contar o total de itens para a paginação
-    total_items = db.execute(f"SELECT COUNT(id) FROM items {where_sql}", params).fetchone()[0]
+    cursor.execute(f"SELECT COUNT(id) as count FROM items {where_sql}", tuple(params))
+    total_items = cursor.fetchone()['count']
     total_pages = math.ceil(total_items / per_page)
 
     # Buscar os itens para a página atual
-    params.extend([per_page, offset])
-    items = db.execute(f"SELECT * FROM items {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?", params).fetchall()
+    final_params = tuple(params) + (per_page, offset)
+    cursor.execute(f"SELECT * FROM items {where_sql} ORDER BY created_at DESC LIMIT %s OFFSET %s", final_params)
+    items = cursor.fetchall()
+    cursor.close()
 
     return render_template('index.html', items=items, page=page, total_pages=total_pages)
 
@@ -454,26 +557,30 @@ def broken_items():
     offset = (page - 1) * per_page
 
     db = get_db()
+    cursor = db.cursor(dictionary=True)
 
     # Parâmetros e cláusulas para a consulta SQL
     params = []
-    where_clauses = ["status = ?"]
+    where_clauses = ["status = %s"]
     params.append('Quebrado')
 
     if search_query:
         search_term = f"%{search_query}%"
-        where_clauses.append("(name LIKE ? OR model LIKE ? OR category LIKE ? OR location LIKE ?)")
+        where_clauses.append("(name LIKE %s OR model LIKE %s OR category LIKE %s OR location LIKE %s)")
         params.extend([search_term, search_term, search_term, search_term])
 
     where_sql = "WHERE " + " AND ".join(where_clauses)
 
     # Contar o total de itens para a paginação
-    total_items = db.execute(f"SELECT COUNT(id) FROM items {where_sql}", params).fetchone()[0]
+    cursor.execute(f"SELECT COUNT(id) as count FROM items {where_sql}", tuple(params))
+    total_items = cursor.fetchone()['count']
     total_pages = math.ceil(total_items / per_page)
 
     # Buscar os itens para a página atual
-    params.extend([per_page, offset])
-    items = db.execute(f"SELECT * FROM items {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?", params).fetchall()
+    final_params = tuple(params) + (per_page, offset)
+    cursor.execute(f"SELECT * FROM items {where_sql} ORDER BY created_at DESC LIMIT %s OFFSET %s", final_params)
+    items = cursor.fetchall()
+    cursor.close()
 
     # Reutiliza o template index.html, passando um título e endpoint específicos
     return render_template('index.html', items=items, page=page, total_pages=total_pages, title='Itens com Avaria', endpoint='broken_items')
@@ -491,8 +598,9 @@ def request_item(item_id):
     
     notes = request.form.get('notes', '').strip()
     try:
-        db.execute(
-            'INSERT INTO item_requests (item_id, user_id, status, notes) VALUES (?, ?, ?, ?)',
+        cursor = db.cursor()
+        cursor.execute(
+            'INSERT INTO item_requests (item_id, user_id, status, notes) VALUES (%s, %s, %s, %s)',
             (item_id, g.user['id'], 'Pendente', notes)
         )
         # Notifica todos os administradores sobre a nova requisição
@@ -502,7 +610,7 @@ def request_item(item_id):
 
         db.commit()
         flash(f'Sua requisição para o item "{item["name"]}" foi enviada para aprovação.', 'success')
-    except sqlite3.Error as e:
+    except mysql.connector.Error as e:
         db.rollback()
         flash(f'Ocorreu um erro ao processar sua requisição: {e}', 'danger')
 
@@ -513,12 +621,14 @@ def request_item(item_id):
 def manage_requests():
     """Página para administradores gerenciarem as requisições de itens."""
     db = get_db()
+    cursor = db.cursor(dictionary=True)
 
     if request.method == 'POST':
         request_id = request.form.get('request_id')
         action = request.form.get('action') # 'approve', 'deny', ou 'inspect'
 
-        req_data = db.execute('SELECT * FROM item_requests WHERE id = ?', (request_id,)).fetchone()
+        cursor.execute('SELECT * FROM item_requests WHERE id = %s', (request_id,))
+        req_data = cursor.fetchone()
         if not req_data:
             abort(404)
 
@@ -527,17 +637,25 @@ def manage_requests():
         item = get_item(req_data['item_id'])
 
         if action == 'approve':
-            requester = db.execute('SELECT username FROM users WHERE id = ?', (req_data['user_id'],)).fetchone()
+            cursor.execute('SELECT username FROM users WHERE id = %s', (req_data['user_id'],))
+            requester = cursor.fetchone()
             # Atualiza o status da requisição
-            db.execute("UPDATE item_requests SET status = 'Aprovado' WHERE id = ?", (request_id,))
+            cursor.execute("UPDATE item_requests SET status = 'Aprovado' WHERE id = %s", (request_id,))
             # Atualiza o item, atribuindo-o ao usuário
-            db.execute(
-                "UPDATE items SET availability_status = 'Em uso', assigned_to = ? WHERE id = ?",
+            cursor.execute(
+                "UPDATE items SET availability_status = 'Em uso', assigned_to = %s WHERE id = %s",
                 (requester['username'], req_data['item_id'])
+            )
+            # Loga a mudança de atribuição
+            log_change(
+                db, item['id'], item['name'],
+                change_type='Atribuição',
+                old_value=item['assigned_to'] or 'Ninguém',
+                new_value=requester['username']
             )
             # Correção: Indentação correta para criar a notificação
             notification_message = f"Sua requisição para '{item['name']}' foi Aprovada."
-            db.execute("INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)", (requester_id, notification_message, url_for('my_requests')))
+            cursor.execute("INSERT INTO notifications (user_id, message, link) VALUES (%s, %s, %s)", (requester_id, notification_message, url_for('my_requests')))
             log_activity(db, f"Aprovou requisição para '{item['name']}' para o usuário '{requester['username']}'")
             flash(f"Requisição para '{item['name']}' aprovada.", 'success')
             
@@ -545,13 +663,13 @@ def manage_requests():
             check_and_notify_stock_level(db, item['category'])
         elif action == 'deny':
             denial_reason = request.form.get('denial_reason', '').strip()
-            db.execute(
-                "UPDATE item_requests SET status = 'Recusado', response_notes = ? WHERE id = ?",
+            cursor.execute(
+                "UPDATE item_requests SET status = 'Recusado', response_notes = %s WHERE id = %s",
                 (denial_reason, request_id)
             )
             # Correção: Indentação correta para criar a notificação
             notification_message = f"Sua requisição para '{item['name']}' foi Recusada." + (f" Motivo: {denial_reason}" if denial_reason else "")
-            db.execute("INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)", (requester_id, notification_message, url_for('my_requests')))
+            cursor.execute("INSERT INTO notifications (user_id, message, link) VALUES (%s, %s, %s)", (requester_id, notification_message, url_for('my_requests')))
             log_activity(db, f"Recusou requisição para '{item['name']}'. Motivo: {denial_reason or 'N/A'}")
             flash("Requisição recusada.", 'info')
         elif action == 'inspect':
@@ -562,11 +680,11 @@ def manage_requests():
             final_condition = request.form.get('final_condition')
             
             # Atualiza o item para 'Livre' e com a condição final
-            db.execute(
-                "UPDATE items SET availability_status = 'Livre', status = ? WHERE id = ?",
+            cursor.execute(
+                "UPDATE items SET availability_status = 'Livre', status = %s WHERE id = %s",
                 (final_condition, item['id'])
             )
-            log_status_change(db, item['id'], item['name'], item['status'], final_condition, notes="Item inspecionado e liberado após devolução.")
+            log_change(db, item['id'], item['name'], 'Condição', item['status'], final_condition, notes="Item inspecionado e liberado após devolução.")
             log_activity(db, f"Inspecionou e liberou o item '{item['name']}'")
             flash(f"Item '{item['name']}' foi inspecionado e está 'Livre' novamente.", 'success')
 
@@ -574,11 +692,13 @@ def manage_requests():
         db.commit()
         return redirect(url_for('manage_requests'))
 
-    requests_list = db.execute("""
+    cursor.execute("""
         SELECT r.id, r.request_date, r.status, r.notes, r.return_notes, i.name as item_name, i.status as item_condition, u.username as user_name
         FROM item_requests r JOIN items i ON r.item_id = i.id JOIN users u ON r.user_id = u.id 
         ORDER BY r.request_date DESC
-    """).fetchall()
+    """)
+    requests_list = cursor.fetchall()
+    cursor.close()
     return render_template('manage_requests.html', requests=requests_list)
 
 @app.route('/stock_levels', methods=('GET', 'POST'))
@@ -586,6 +706,7 @@ def manage_requests():
 def manage_stock_levels():
     """Página para administradores definirem os níveis de estoque mínimo por categoria."""
     db = get_db()
+    cursor = db.cursor()
 
     if request.method == 'POST':
         for key, value in request.form.items():
@@ -594,28 +715,31 @@ def manage_stock_levels():
                 min_level = int(value) if value.isdigit() else 0
                 
                 # UPSERT: Insere ou atualiza a configuração
-                db.execute("""
+                cursor.execute("""
                     INSERT INTO category_stock_settings (category_name, min_stock_level)
-                    VALUES (?, ?)
-                    ON CONFLICT(category_name) DO UPDATE SET min_stock_level = excluded.min_stock_level
-                """, (category_name, min_level))
+                    VALUES (%s, %s)
+                    ON DUPLICATE KEY UPDATE min_stock_level = VALUES(min_stock_level)
+                """, (category_name, min_level,))
         db.commit()
+        cursor.close()
         flash('Níveis de estoque mínimo atualizados com sucesso.', 'success')
         return redirect(url_for('manage_stock_levels'))
 
     # Coleta dados para exibir na página
-    categories_cursor = db.execute("""
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("""
         SELECT 
             i.category, 
             COUNT(i.id) as total_items,
             SUM(CASE WHEN i.availability_status = 'Livre' THEN 1 ELSE 0 END) as available_items,
             COALESCE(css.min_stock_level, 0) as min_stock_level
         FROM items i
-        LEFT JOIN category_stock_settings css ON i.category = css.category_name
+        LEFT JOIN category_stock_settings css ON i.category <=> css.category_name
         WHERE i.category IS NOT NULL AND i.category != ''
         GROUP BY i.category ORDER BY i.category
     """)
-    categories_data = categories_cursor.fetchall()
+    categories_data = cursor.fetchall()
+    cursor.close()
     return render_template('manage_stock_levels.html', categories_data=categories_data)
 
 @app.route('/request_multiple', methods=['POST'])
@@ -623,6 +747,7 @@ def manage_stock_levels():
 def request_multiple_items():
     """Registra a requisição de múltiplos itens por um usuário."""
     db = get_db()
+    cursor = db.cursor()
     item_ids = request.form.getlist('item_ids')
     notes = request.form.get('notes', '').strip()
 
@@ -637,8 +762,8 @@ def request_multiple_items():
         item = get_item(item_id) # This already aborts if not found
         if item['availability_status'] == 'Livre':
             try:
-                db.execute(
-                    'INSERT INTO item_requests (item_id, user_id, status, notes) VALUES (?, ?, ?, ?)',
+                cursor.execute(
+                    'INSERT INTO item_requests (item_id, user_id, status, notes) VALUES (%s, %s, %s, %s)',
                     (item_id, g.user['id'], 'Pendente', notes)
                 )
                 # Notifica todos os administradores sobre a nova requisição
@@ -647,7 +772,7 @@ def request_multiple_items():
                 notify_admins(db, notification_message, notification_link)
 
                 requested_count += 1
-            except sqlite3.Error as e:
+            except mysql.connector.Error as e:
                 errors.append(f"Erro ao requisitar '{item['name']}': {e}")
         else:
             errors.append(f"O item '{item['name']}' não está mais disponível.")
@@ -665,12 +790,15 @@ def request_multiple_items():
 def my_requests():
     """Página para o usuário comum ver o status de suas requisições."""
     db = get_db()
-    requests_list = db.execute("""
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("""
         SELECT r.id, r.request_date, r.status, r.notes, r.response_notes, r.return_notes, i.name as item_name, i.status as item_condition
         FROM item_requests r JOIN items i ON r.item_id = i.id
-        WHERE r.user_id = ?
+        WHERE r.user_id = %s
         ORDER BY r.request_date DESC
-    """, (g.user['id'],)).fetchall()
+    """, (g.user['id'],))
+    requests_list = cursor.fetchall()
+    cursor.close()
     return render_template('my_requests.html', requests=requests_list)
 
 @app.route('/profile', methods=('GET', 'POST'))
@@ -679,6 +807,7 @@ def profile():
     """Página de perfil do usuário com resumo de atividades."""
     db = get_db()
     user_id = g.user['id']
+    cursor = db.cursor(dictionary=True)
 
     if request.method == 'POST':
         if 'profile_pic' not in request.files:
@@ -695,7 +824,7 @@ def profile():
             
             file.save(os.path.join(app.config['PROFILE_PICS_FOLDER'], new_filename))
             
-            db.execute('UPDATE users SET profile_image_file = ? WHERE id = ?', (new_filename, user_id))
+            cursor.execute('UPDATE users SET profile_image_file = %s WHERE id = %s', (new_filename, user_id))
             db.commit()
             flash('Foto de perfil atualizada com sucesso!', 'success')
             return redirect(url_for('profile'))
@@ -703,18 +832,24 @@ def profile():
     # Estatísticas dinâmicas baseadas no perfil do usuário
     stats = {}
     if g.user['role'] == 'admin':
-        stats['approved_requests'] = db.execute("SELECT COUNT(id) FROM item_requests WHERE status = 'Aprovado'").fetchone()[0]
-        stats['denied_requests'] = db.execute("SELECT COUNT(id) FROM item_requests WHERE status = 'Recusado'").fetchone()[0]
-        stats['total_items_added'] = db.execute('SELECT COUNT(id) FROM items').fetchone()[0]
+        cursor.execute("SELECT COUNT(id) as count FROM item_requests WHERE status = 'Aprovado'")
+        stats['approved_requests'] = cursor.fetchone()['count']
+        cursor.execute("SELECT COUNT(id) as count FROM item_requests WHERE status = 'Recusado'")
+        stats['denied_requests'] = cursor.fetchone()['count']
+        cursor.execute('SELECT COUNT(id) as count FROM items')
+        stats['total_items_added'] = cursor.fetchone()['count']
     else:
-        stats['total_requests'] = db.execute('SELECT COUNT(id) FROM item_requests WHERE user_id = ?', (user_id,)).fetchone()[0]
-        stats['items_in_possession'] = db.execute('SELECT COUNT(id) FROM item_requests WHERE user_id = ? AND status = ?', (user_id, 'Aprovado')).fetchone()[0]
+        cursor.execute('SELECT COUNT(id) as count FROM item_requests WHERE user_id = %s', (user_id,))
+        stats['total_requests'] = cursor.fetchone()['count']
+        cursor.execute('SELECT COUNT(id) as count FROM item_requests WHERE user_id = %s AND status = %s', (user_id, 'Aprovado'))
+        stats['items_in_possession'] = cursor.fetchone()['count']
 
     # Últimas atividades do usuário
-    recent_activities = db.execute(
-        'SELECT action, item_name, timestamp FROM activity_log WHERE user_id = ? ORDER BY timestamp DESC LIMIT 10',
+    cursor.execute(
+        'SELECT action, item_name, timestamp FROM activity_log WHERE user_id = %s ORDER BY timestamp DESC LIMIT 10',
         (user_id,)
-    ).fetchall()
+    )
+    recent_activities = cursor.fetchall()
 
     # --- Dados para o gráfico de atividades ---
     from collections import OrderedDict
@@ -725,14 +860,15 @@ def profile():
         activity_by_day[day.strftime("%Y-%m-%d")] = 0
     
     # Query para obter a contagem de atividades
-    activity_counts_cursor = db.execute("""
-        SELECT strftime('%Y-%m-%d', timestamp) as day, COUNT(id) as count 
+    cursor.execute("""
+        SELECT DATE_FORMAT(timestamp, '%Y-%m-%d') as day, COUNT(id) as count 
         FROM activity_log 
-        WHERE user_id = ? AND timestamp >= date('now', '-30 days')
+        WHERE user_id = %s AND timestamp >= DATE_SUB(NOW(), INTERVAL 30 DAY)
         GROUP BY day
-    """, (user_id,)).fetchall()
+    """, (user_id,))
+    activity_counts = cursor.fetchall()
 
-    for row in activity_counts_cursor:
+    for row in activity_counts:
         if row['day'] in activity_by_day:
             activity_by_day[row['day']] = row['count']
 
@@ -752,9 +888,11 @@ def profile():
 def return_item(request_id):
     """Processa a devolução de um item por um usuário."""
     db = get_db()
-    req_data = db.execute(
-        'SELECT * FROM item_requests WHERE id = ? AND user_id = ?', (request_id, g.user['id'])
-    ).fetchone()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute(
+        'SELECT * FROM item_requests WHERE id = %s AND user_id = %s', (request_id, g.user['id'])
+    )
+    req_data = cursor.fetchone()
 
     if not req_data or req_data['status'] != 'Aprovado':
         flash('Requisição não encontrada ou item não está em posse para devolução.', 'danger')
@@ -767,25 +905,25 @@ def return_item(request_id):
 
     try:
         # 1. Atualiza o status da requisição para 'Devolvido' e salva as notas
-        db.execute(
-            "UPDATE item_requests SET status = 'Devolvido', return_notes = ? WHERE id = ?",
+        cursor.execute(
+            "UPDATE item_requests SET status = 'Devolvido', return_notes = %s WHERE id = %s",
             (return_notes, request_id)
         )
         # 2. Atualiza o item: status de disponibilidade, condição e remove atribuição
         # O item volta a ficar 'Livre' imediatamente.
-        db.execute(
-            "UPDATE items SET availability_status = 'Livre', status = ?, assigned_to = NULL WHERE id = ?",
+        cursor.execute(
+            "UPDATE items SET availability_status = 'Livre', status = %s, assigned_to = NULL WHERE id = %s",
             (new_condition, item_id)
         )
         # 3. Loga a mudança de condição e a atividade de devolução
-        log_status_change(db, item_id, item['name'], item['status'], new_condition, notes=f"Devolvido por usuário. {return_notes}")
+        log_change(db, item_id, item['name'], 'Condição', item['status'], new_condition, notes=f"Devolvido por usuário. {return_notes}")
         log_activity(db, f"Devolveu o item '{item['name']}'")
         # 4. Notifica os administradores
         notify_admins(db, f"Item '{item['name']}' devolvido por {g.user['username']}. Inspeção necessária.", url_for('manage_requests'))
 
         db.commit()
         flash(f"Item '{item['name']}' devolvido com sucesso. Aguardando inspeção do administrador.", 'success')
-    except sqlite3.Error as e:
+    except mysql.connector.Error as e:
         db.rollback()
         flash(f'Ocorreu um erro ao devolver o item: {e}', 'danger')
 
@@ -796,13 +934,15 @@ def return_item(request_id):
 def read_notification(notification_id):
     """Marca uma notificação específica como lida e redireciona para seu link."""
     db = get_db()
-    notification = db.execute(
-        'SELECT * FROM notifications WHERE id = ? AND user_id = ?',
+    cursor = db.cursor(dictionary=True)
+    cursor.execute(
+        'SELECT * FROM notifications WHERE id = %s AND user_id = %s',
         (notification_id, g.user['id'])
-    ).fetchone()
+    )
+    notification = cursor.fetchone()
 
     if notification:
-        db.execute('UPDATE notifications SET is_read = 1 WHERE id = ?', (notification_id,))
+        cursor.execute('UPDATE notifications SET is_read = 1 WHERE id = %s', (notification_id,))
         db.commit()
         # Se a notificação tiver um link, redireciona para ele.
         if notification['link']:
@@ -816,7 +956,8 @@ def read_notification(notification_id):
 def mark_all_read():
     """Marca todas as notificações do usuário como lidas."""
     db = get_db()
-    db.execute('UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0', (g.user['id'],))
+    cursor = db.cursor()
+    cursor.execute('UPDATE notifications SET is_read = 1 WHERE user_id = %s AND is_read = 0', (g.user['id'],))
     db.commit()
     return redirect(request.referrer or url_for('dashboard'))
 
@@ -829,24 +970,27 @@ def export_csv():
     category_filter = request.args.get('category')
 
     db = get_db()
+    cursor = db.cursor(dictionary=True)
 
     # Reutiliza a lógica de filtragem da rota index
     params = []
     where_clauses = []
 
     if category_filter:
-        where_clauses.append("category = ?")
+        where_clauses.append("category = %s")
         params.append(category_filter)
 
     if search_query:
         search_term = f"%{search_query}%"
-        where_clauses.append("(name LIKE ? OR model LIKE ? OR category LIKE ? OR location LIKE ?)")
+        where_clauses.append("(name LIKE %s OR model LIKE %s OR category LIKE %s OR location LIKE %s)")
         params.extend([search_term, search_term, search_term, search_term])
 
     where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
     # Busca todos os itens que correspondem ao filtro, sem paginação
-    items = db.execute(f"SELECT * FROM items {where_sql} ORDER BY created_at DESC", params).fetchall()
+    cursor.execute(f"SELECT * FROM items {where_sql} ORDER BY created_at DESC", params)
+    items = cursor.fetchall()
+    cursor.close()
 
     # Gera o CSV em memória
     output = io.StringIO()
@@ -874,6 +1018,8 @@ def export_csv():
 @login_required
 def add():
     """Página para adicionar um novo item."""
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
     if request.method == 'POST':
         name = request.form['name']
         model = request.form['model']
@@ -886,28 +1032,50 @@ def add():
         assigned_to = request.form.get('assigned_to') # Novo campo
         authorized_by = request.form.get('authorized_by') # Novo campo
 
-        db = get_db()
+        # --- VALIDAÇÃO CONDICIONAL ---
+        # Se o item está 'Em uso', ele DEVE ser atribuído a alguém.
+        if availability_status == 'Em uso' and not assigned_to:
+            flash('O campo "Atribuído a" é obrigatório quando a disponibilidade é "Em uso".', 'danger')
+            cursor.execute('SELECT username FROM users ORDER BY username')
+            all_users = cursor.fetchall()
+            cursor.execute("SELECT username FROM users WHERE role = 'admin' ORDER BY username")
+            all_admins = cursor.fetchall()
+            return render_template('add_item.html', all_users=all_users, all_admins=all_admins)
+
         try:
-            cursor = db.execute( # Adicionado assigned_to e authorized_by
-                'INSERT INTO items (name, model, category, location, purchase_date, serial_number, status, availability_status, assigned_to, authorized_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                (name, model, category, location, purchase_date, serial_number, status, availability_status, assigned_to, authorized_by)
+            write_cursor = db.cursor()
+            new_uuid = str(uuid.uuid4())
+            write_cursor.execute( # Adicionado assigned_to e authorized_by
+                'INSERT INTO items (name, model, category, location, purchase_date, serial_number, status, availability_status, assigned_to, authorized_by, item_uuid) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                (name, model, category, location, purchase_date, serial_number, status, availability_status, assigned_to, authorized_by, new_uuid)
             )
-            new_item_id = cursor.lastrowid
+            new_item_id = write_cursor.lastrowid
 
             # Agrupa os logs na mesma transação
             log_activity(db, 'Criou item', item_id=new_item_id, item_name=name)
-            log_status_change(db, new_item_id, name, None, status, notes="Criação inicial do item.")
+            log_change(db, new_item_id, name, 'Condição', None, status, notes="Criação inicial do item.")
             db.commit() # Salva o item e os logs de uma só vez
+            cursor.close()
 
             flash(f'Item "{name}" foi adicionado com sucesso!', 'success')
             return redirect(url_for('index'))
-        except sqlite3.Error as e:
+        except mysql.connector.Error as e:
             db.rollback() # Reverte a transação em caso de erro
             flash(f'Erro ao adicionar item: {e}', 'danger')
             print(f"Erro no banco de dados ao adicionar item: {e}") # Imprime o erro no console do servidor
-            return render_template('add_item.html') # Permanece na página de adição para exibir o erro
+            # Recarrega os dados para o formulário em caso de erro
+            cursor.execute('SELECT username FROM users ORDER BY username')
+            all_users = cursor.fetchall()
+            cursor.execute("SELECT username FROM users WHERE role = 'admin' ORDER BY username")
+            all_admins = cursor.fetchall()
+            return render_template('add_item.html', all_users=all_users, all_admins=all_admins)
 
-    return render_template('add_item.html')
+    cursor.execute('SELECT username FROM users ORDER BY username')
+    all_users = cursor.fetchall()
+    cursor.execute("SELECT username FROM users WHERE role = 'admin' ORDER BY username")
+    all_admins = cursor.fetchall()
+    cursor.close()
+    return render_template('add_item.html', all_users=all_users, all_admins=all_admins)
 
 @app.route('/<int:id>/edit', methods=('GET', 'POST'))
 @login_required
@@ -915,6 +1083,8 @@ def edit(id):
     """Página para editar um item existente."""
     item = get_item(id)
 
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
     if request.method == 'POST':
         name = request.form['name']
         model = request.form['model']
@@ -928,35 +1098,63 @@ def edit(id):
         authorized_by = request.form.get('authorized_by') # Novo campo
         status_notes = request.form.get('status_notes', '').strip() # Campo de observações
 
+        # --- VALIDAÇÃO CONDICIONAL ---
+        # Se o item está 'Em uso', ele DEVE ser atribuído a alguém.
+        if availability_status == 'Em uso' and not assigned_to:
+            flash('O campo "Atribuído a" é obrigatório quando a disponibilidade é "Em uso".', 'danger')
+            cursor.execute('SELECT username FROM users ORDER BY username')
+            all_users = cursor.fetchall()
+            cursor.execute("SELECT username FROM users WHERE role = 'admin' ORDER BY username")
+            all_admins = cursor.fetchall()
+            return render_template('edit_item.html', item=item, all_users=all_users, all_admins=all_admins)
+
         try:
-            db = get_db()
             # Se o status mudou, registra no histórico
-            if status != item['status']:
-                log_status_change(db, id, name, item['status'], status, notes=status_notes)
+            if status != item['status']: 
+                log_change(db, id, name, 'Condição', item['status'], status, notes=status_notes)
+
+            # Se a atribuição mudou, registra no histórico
+            if assigned_to != item['assigned_to']:
+                log_change(db, id, name, 
+                           change_type='Atribuição', 
+                           old_value=item['assigned_to'] or 'Ninguém', 
+                           new_value=assigned_to or 'Ninguém', 
+                           notes=status_notes)
 
             # Verifica se a disponibilidade mudou de 'Livre' para outro estado
             if item['availability_status'] == 'Livre' and availability_status != 'Livre':
                 check_and_notify_stock_level(db, category)
 
-            db.execute( # Adicionado assigned_to e authorized_by
-                'UPDATE items SET name = ?, model = ?, category = ?, location = ?, purchase_date = ?, serial_number = ?, status = ?, availability_status = ?, assigned_to = ?, authorized_by = ?'
-                ' WHERE id = ?',
+            cursor.execute( # Adicionado assigned_to e authorized_by
+                'UPDATE items SET name = %s, model = %s, category = %s, location = %s, purchase_date = %s, serial_number = %s, status = %s, availability_status = %s, assigned_to = %s, authorized_by = %s'
+                ' WHERE id = %s',
                 (name, model, category, location, purchase_date, serial_number, status, availability_status, assigned_to, authorized_by, id)
             )
             # Log da edição do item
             log_activity(db, 'Editou item', item_id=id, item_name=name)
 
             db.commit()
+            cursor.close()
 
             flash(f'Item "{name}" foi atualizado com sucesso!', 'success')
             return redirect(url_for('index'))
-        except sqlite3.Error as e:
+        except mysql.connector.Error as e:
             db.rollback()
             flash(f'Erro ao editar o item: {e}', 'danger')
             print(f"Erro no banco de dados ao editar item: {e}")
-            return render_template('edit_item.html', item=item)
+            # Recarrega os dados para o formulário em caso de erro
+            cursor.execute('SELECT username FROM users ORDER BY username')
+            all_users = cursor.fetchall()
+            cursor.execute("SELECT username FROM users WHERE role = 'admin' ORDER BY username")
+            all_admins = cursor.fetchall()
+            return render_template('edit_item.html', item=item, all_users=all_users, all_admins=all_admins)
 
-    return render_template('edit_item.html', item=item)
+    cursor.execute('SELECT username FROM users ORDER BY username')
+    all_users = cursor.fetchall()
+    cursor.execute("SELECT username FROM users WHERE role = 'admin' ORDER BY username")
+    all_admins = cursor.fetchall()
+    cursor.close()
+    return render_template('edit_item.html', item=item, all_users=all_users, all_admins=all_admins)
 
 @app.route('/item/<int:id>/history')
 @login_required
@@ -964,9 +1162,12 @@ def item_history(id):
     """Exibe o histórico de status de um item específico."""
     item = get_item(id) # Pega os detalhes do item para o título da página
     db = get_db()
-    history_entries = db.execute(
-        'SELECT * FROM status_history WHERE item_id = ? ORDER BY timestamp DESC', (id,)
-    ).fetchall()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute(
+        'SELECT * FROM status_history WHERE item_id = %s ORDER BY timestamp DESC', (id,)
+    )
+    history_entries = cursor.fetchall()
+    cursor.close()
     return render_template('item_history.html', item=item, history_entries=history_entries)
 
 @app.route('/item/<int:id>/pdf')
@@ -996,13 +1197,14 @@ def delete(id):
     item = get_item(id) # Verifica se o item existe e pega os dados para o log.
     try:
         db = get_db()
-        db.execute('DELETE FROM items WHERE id = ?', (id,))
+        cursor = db.cursor()
+        cursor.execute('DELETE FROM items WHERE id = %s', (id,))
         log_activity(db, 'Excluiu item', item_id=id, item_name=item['name'])
         db.commit()
         
         # Após deletar, verifica o nível de estoque da categoria do item
         check_and_notify_stock_level(get_db(), item['category'])
-    except sqlite3.Error as e:
+    except mysql.connector.Error as e:
         flash(f'Erro ao excluir o item: {e}', 'danger')
     flash(f'Item "{item["name"]}" foi excluído com sucesso.', 'info')
     return redirect(url_for('index'))
@@ -1015,17 +1217,21 @@ def logs():
     per_page = 20 # Logs podem ser mais densos
     offset = (page - 1) * per_page
     db = get_db()
-    total_logs = db.execute('SELECT COUNT(id) FROM activity_log').fetchone()[0]
+    cursor = db.cursor(dictionary=True)
+    cursor.execute('SELECT COUNT(id) as count FROM activity_log')
+    total_logs = cursor.fetchone()['count']
     total_pages = math.ceil(total_logs / per_page)
     
     # Adiciona a lógica de busca ao log de atividades
     search_query = request.args.get('q', '')
     search_param = f"%{search_query}%"
 
-    log_entries = db.execute(
-        'SELECT * FROM activity_log WHERE username LIKE ? OR action LIKE ? OR item_name LIKE ? ORDER BY timestamp DESC LIMIT ? OFFSET ?',
+    cursor.execute(
+        'SELECT * FROM activity_log WHERE username LIKE %s OR action LIKE %s OR item_name LIKE %s ORDER BY timestamp DESC LIMIT %s OFFSET %s',
         (search_param, search_param, search_param, per_page, offset)
-    ).fetchall()
+    )
+    log_entries = cursor.fetchall()
+    cursor.close()
     return render_template('logs.html', log_entries=log_entries, page=page, total_pages=total_pages)
 
 @app.route('/register', methods=('GET', 'POST'))
@@ -1036,6 +1242,7 @@ def register():
         password = request.form['password']
         confirm_password = request.form['confirm_password']
         db = get_db()
+        cursor = db.cursor()
         error = None
 
         if not username:
@@ -1047,12 +1254,12 @@ def register():
 
         if error is None:
             try:
-                db.execute(
-                    "INSERT INTO users (username, password) VALUES (?, ?)",
+                cursor.execute(
+                    "INSERT INTO users (username, password) VALUES (%s, %s)",
                     (username, generate_password_hash(password)),
                 )
                 db.commit()
-            except db.IntegrityError:
+            except mysql.connector.IntegrityError:
                 error = f"Usuário {username} já está registrado."
             else:
                 flash('Conta criada com sucesso! Por favor, faça o login.', 'success')
@@ -1069,8 +1276,10 @@ def login():
         username = request.form['username']
         password = request.form['password']
         db = get_db()
+        cursor = db.cursor(dictionary=True)
         error = None
-        user = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
+        user = cursor.fetchone()
 
         if user is None or not check_password_hash(user['password'], password):
             error = 'Usuário ou senha inválidos.'
@@ -1112,8 +1321,9 @@ def change_password():
 
         if error is None:
             db = get_db()
-            db.execute(
-                'UPDATE users SET password = ? WHERE id = ?',
+            cursor = db.cursor()
+            cursor.execute(
+                'UPDATE users SET password = %s WHERE id = %s',
                 (generate_password_hash(new_password), g.user['id'])
             )
             db.commit()

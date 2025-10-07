@@ -6,7 +6,7 @@
     <style>
         /* Sci-Fi Dark Theme for Inventory Table */
         .table-container {
-            background-color: #000000; /* Black background */
+            background-color: transparent; /* Fundo transparente para integrar com o layout base */
             padding: 2rem;
             border-radius: 0.75rem;
            
@@ -148,6 +148,10 @@
                     <a href="{{ url_for('export_csv', q=request.args.get('q', ''), category=request.args.get('category')) }}" class="btn btn-search me-2">
                         <i class="bi bi-file-earmark-spreadsheet"></i> Exportar CSV
                     </a>
+                    <!-- Botão para imprimir etiquetas em lote (admin) -->
+                    <button type="button" class="btn btn-info me-2" id="batch-print-btn" disabled>
+                        <i class="bi bi-printer"></i> Imprimir Etiquetas
+                    </button>
                     <a href="{{ url_for('add') }}" class="btn btn-futuristic-add">Adicionar</a>
                 </div>
             {% else %}
@@ -175,7 +179,7 @@
                 <table class="table table-futuristic">
                 <thead>
                     <tr>
-                    {% if g.user['role'] != 'admin' %}<th><input type="checkbox" id="select-all-checkbox" title="Selecionar todos"></th>{% endif %}
+                    <th><input type="checkbox" id="select-all-checkbox" title="Selecionar todos"></th>
                     <th>Nome</th>
                     <th>Modelo</th>
                     <th>Categoria</th>
@@ -192,11 +196,13 @@
                 <tbody>
                 {% for item in items %}
                 <tr>
-                    {% if g.user['role'] != 'admin' %}
                     <td>
-                        {% if item.availability_status == 'Livre' %}<input type="checkbox" name="item_ids" value="{{ item.id }}" class="item-checkbox">{% endif %}
+                        {% if g.user.role != 'admin' and item.availability_status != 'Livre' %}
+                            <!-- Espaço reservado para itens indisponíveis para usuários comuns -->
+                        {% else %}
+                            <input type="checkbox" name="item_ids" value="{{ item.id }}" class="item-checkbox">
+                        {% endif %}
                     </td>
-                    {% endif %}
                     <td>{{ item['name'] }}</td>
                     <td>{{ item['model'] or 'N/A' }}</td>
                     <td>{{ item['category'] }}</td>
@@ -250,7 +256,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="{% if g.user['role'] != 'admin' %}12{% else %}11{% endif %}" class="text-center">Nenhum item encontrado.</td>
+                    <td colspan="12" class="text-center">Nenhum item encontrado.</td>
                 </tr>
                 {% endfor %}
                 </tbody>
@@ -305,48 +311,70 @@
     </nav>
     {% endif %}
 
-    {% if g.user['role'] != 'admin' %}
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         const selectAllCheckbox = document.getElementById('select-all-checkbox');
         const itemCheckboxes = document.querySelectorAll('.item-checkbox');
-        const batchRequestBtn = document.getElementById('batch-request-btn');
-        const selectedCountSpan = document.getElementById('selected-count');
         const requestForm = document.getElementById('request-form');
 
-        function toggleRequestButton() {
+        // Botões de ação em lote
+        const batchRequestBtn = document.getElementById('batch-request-btn');
+        const batchPrintBtn = document.getElementById('batch-print-btn');
+
+        // Elemento do modal
+        const selectedCountSpan = document.getElementById('selected-count');
+
+        function updateBatchButtons() {
             const checkedCount = document.querySelectorAll('.item-checkbox:checked').length;
-            batchRequestBtn.disabled = checkedCount === 0;
-            if (selectedCountSpan) {
+            const enabled = checkedCount > 0;
+
+            if (batchRequestBtn) {
+                batchRequestBtn.disabled = !enabled;
+            }
+            if (batchPrintBtn) {
+                batchPrintBtn.disabled = !enabled;
+            }
+            if (selectedCountSpan) { // Atualiza a contagem no modal de requisição
                 selectedCountSpan.textContent = checkedCount;
             }
         }
 
-        if (selectAllCheckbox) {
-            selectAllCheckbox.addEventListener('change', function () {
-                itemCheckboxes.forEach(checkbox => {
-                    checkbox.checked = selectAllCheckbox.checked;
-                });
-                toggleRequestButton();
+        selectAllCheckbox.addEventListener('change', function () {
+            itemCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateBatchButtons();
+        });
+
+        itemCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateBatchButtons);
+        });
+
+        // Lógica para o botão de impressão em lote (admin)
+        if (batchPrintBtn) {
+            batchPrintBtn.addEventListener('click', function() {
+                const originalAction = requestForm.action; // Salva a ação original
+                const originalTarget = requestForm.target; // Salva o target original
+
+                requestForm.action = "{{ url_for('generate_multiple_labels') }}";
+                requestForm.target = '_blank'; // Abre em uma nova aba
+                requestForm.submit();
+
+                requestForm.action = originalAction; // Restaura a ação original
+                requestForm.target = originalTarget; // Restaura o target original
             });
         }
 
-        itemCheckboxes.forEach(checkbox => checkbox.addEventListener('change', toggleRequestButton));
-
-        // Adiciona lógica para os botões de requisição individual
+        // Lógica para botões de requisição individual (usuário comum)
         document.querySelectorAll('.request-single-item-btn').forEach(button => {
             button.addEventListener('click', function() {
                 const itemId = this.getAttribute('data-item-id');
-                
-                // Desmarca todos os outros checkboxes para garantir que apenas este item seja enviado
                 itemCheckboxes.forEach(cb => {
                     cb.checked = (cb.value === itemId);
                 });
-
-                toggleRequestButton(); // Atualiza a contagem no modal
+                updateBatchButtons(); // Atualiza a contagem e o estado do botão
             });
         });
     });
     </script>
-    {% endif %}
 {% endblock %}

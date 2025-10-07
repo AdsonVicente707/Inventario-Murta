@@ -22,7 +22,7 @@
             <tbody>
                 {% for req in requests %}
                 <tr>
-                    <td>{{ req.request_date.split(' ')[0] }}</td>
+                    <td>{{ req.request_date.strftime('%Y-%m-%d') }}</td>
                     <td>{{ req.item_name }}</td>
                     <td>
                         <span class="badge 

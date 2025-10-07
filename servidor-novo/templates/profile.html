@@ -4,8 +4,21 @@
  
 {% block content %}
 <style>
+    :root {
+        --primary-color: #00cfff;
+        --success-color: #00ff00;
+        --danger-color: #ff0000;
+        --header-bg: #1a0029;
+        --card-bg: #111;
+        --container-bg: #000000;
+        --text-muted-color: rgba(255, 255, 255, 0.5);
+        --grid-color: rgba(255, 255, 255, 0.1);
+        --text-light-color: rgba(255, 255, 255, 0.7);
+    }
+
     .profile-header {
         position: relative;
+        background-color: var(--header-bg);
     }
     .profile-pic-container {
         position: relative;
@@ -17,7 +30,7 @@
         height: 100%;
         object-fit: cover;
         border-radius: 50%;
-        border: 4px solid #00cfff;
+        border: 4px solid var(--primary-color);
     }
     .upload-overlay {
         position: absolute;
@@ -39,21 +52,38 @@
         opacity: 1;
     }
     .stat-card-minimalist {
-        background-color: #111;
+        background-color: var(--card-bg);
         border-left: 5px solid;
         transition: transform 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     .stat-card-minimalist:hover {
         transform: scale(1.03);
+    }
+    .stat-card-approved { border-color: var(--success-color); }
+    .stat-card-denied { border-color: var(--danger-color); }
+    .stat-card-info { border-color: var(--primary-color); }
+
+    .table-container {
+        background-color: var(--container-bg);
+        padding: 1.5rem;
+        border-radius: 0.25rem;
+    }
+    .chart-container {
+        background-color: var(--container-bg);
+        padding: 1.5rem;
+        border-radius: 0.25rem;
     }
 </style>
  
 <div class="container-fluid">
     <div class="row mb-4">
         <div class="col-12">
-            <div class="p-4 rounded profile-header" style="background-color: #1a0029;">
+            <div class="p-4 rounded profile-header">
                 <div class="d-flex align-items-center">
-                    <div class="profile-pic-container me-4" onclick="document.getElementById('profilePicInput').click();">
+                    <label for="profilePicInput" class="profile-pic-container me-4" style="cursor: pointer;">
                         {% if g.user.profile_image_file %}
                             <img src="{{ url_for('profile_pic', filename=g.user.profile_image_file) }}" alt="Foto de Perfil" class="profile-pic">
                         {% else %}
@@ -62,7 +92,7 @@
                         <div class="upload-overlay">
                             <i class="bi bi-camera-fill fs-3"></i>
                         </div>
-                    </div>
+                    </label>
                     <div>
                         <h1 class="mb-0">{{ g.user.username }}</h1>
                         <span class="badge bg-primary text-uppercase">{{ g.user.role }}</span>
@@ -79,29 +109,34 @@
     <div class="row g-4 mb-4">
         {% if g.user['role'] == 'admin' %}
             <div class="col-md-4">
-                <div class="p-3 rounded h-100 stat-card-minimalist" style="border-color: #00ff00;">
-                    <h5 class="text-muted text-uppercase">Requisições Aprovadas</h5><h2 class="display-6 fw-bold">{{ stats.approved_requests }}</h2>
+                <div class="p-3 rounded h-100 stat-card-minimalist stat-card-approved">
+                    <h5 class="text-muted text-uppercase">Requisições Aprovadas</h5>
+                    <h2 class="display-6 fw-bold">{{ stats.approved_requests }}</h2>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="p-3 rounded h-100 stat-card-minimalist" style="border-color: #ff0000;">
-                    <h5 class="text-muted text-uppercase">Requisições Recusadas</h5><h2 class="display-6 fw-bold">{{ stats.denied_requests }}</h2>
+                <div class="p-3 rounded h-100 stat-card-minimalist stat-card-denied">
+                    <h5 class="text-muted text-uppercase">Requisições Recusadas</h5>
+                    <h2 class="display-6 fw-bold">{{ stats.denied_requests }}</h2>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="p-3 rounded h-100 stat-card-minimalist" style="border-color: #00cfff;">
-                    <h5 class="text-muted text-uppercase">Itens no Inventário</h5><h2 class="display-6 fw-bold">{{ stats.total_items_added }}</h2>
+                <div class="p-3 rounded h-100 stat-card-minimalist stat-card-info">
+                    <h5 class="text-muted text-uppercase">Itens no Inventário</h5>
+                    <h2 class="display-6 fw-bold">{{ stats.total_items_added }}</h2>
                 </div>
             </div>
         {% else %}
             <div class="col-md-6">
-                <div class="p-3 rounded h-100 stat-card-minimalist" style="border-color: #00cfff;">
-                    <h5 class="text-muted text-uppercase">Total de Requisições</h5><h2 class="display-6 fw-bold">{{ stats.total_requests }}</h2>
+                <div class="p-3 rounded h-100 stat-card-minimalist stat-card-info">
+                    <h5 class="text-muted text-uppercase">Total de Requisições</h5>
+                    <h2 class="display-6 fw-bold">{{ stats.total_requests }}</h2>
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="p-3 rounded h-100 stat-card-minimalist" style="border-color: #00ff00;">
-                    <h5 class="text-muted text-uppercase">Itens em Posse</h5><h2 class="display-6 fw-bold">{{ stats.items_in_possession }}</h2>
+                <div class="p-3 rounded h-100 stat-card-minimalist stat-card-approved">
+                    <h5 class="text-muted text-uppercase">Itens em Posse</h5>
+                    <h2 class="display-6 fw-bold">{{ stats.items_in_possession }}</h2>
                 </div>
             </div>
         {% endif %}
@@ -110,7 +145,7 @@
     <!-- Atividades Recentes -->
     <div class="row">
         <div class="col-12">
-            <div class="table-container" style="background-color: #000000;">
+            <div class="table-container">
                 <h3 class="mb-3">Atividades Recentes</h3>
                 {% if recent_activities %}
                     <div class="table-responsive">
@@ -144,7 +179,7 @@
 <!-- Gráfico de Atividades -->
 <div class="row mt-4">
     <div class="col-12">
-        <div class="table-container" style="background-color: #000000;">
+        <div class="chart-container">
             <h3 class="mb-3">Atividades nos Últimos 30 Dias</h3>
             <canvas id="activityChart"></canvas>
         </div>
@@ -169,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 label: 'Número de Atividades',
                 data: {{ chart_data|tojson }},
                 backgroundColor: gradient,
-                borderColor: '#00cfff',
+                borderColor: 'var(--primary-color)',
                 borderWidth: 1,
                 borderRadius: 4,
                 hoverBackgroundColor: '#00cfff'
@@ -194,13 +229,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        color: 'rgba(255, 255, 255, 0.7)',
+                        color: 'var(--text-light-color)',
                         stepSize: 1 // Garante que o eixo Y tenha apenas números inteiros
                     },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    grid: { color: 'var(--grid-color)' }
                 },
                 x: {
-                    ticks: { color: 'rgba(255, 255, 255, 0.7)' },
+                    ticks: { color: 'var(--text-light-color)' },
                     grid: { display: false }
                 }
             }
