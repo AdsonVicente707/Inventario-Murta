@@ -7,8 +7,7 @@ from werkzeug.security import generate_password_hash
 DB_CONFIG = {
     'host': 'localhost',
     'user': 'root', # <-- COLOQUE SEU USUÁRIO REAL DO MYSQL AQUI
-    'password': 'sua_senha_real', # <-- COLOQUE SUA SENHA REAL DO MYSQL AQUI
-    'password': 'SUA_SENHA_CORRETA_AQUI', # <-- COLOQUE SUA SENHA REAL DO MYSQL AQUI
+    'password': 'sua_senha_real', # <-- SUBSTITUA PELA SUA SENHA REAL DO MYSQL AQUI
     'database': 'inventory_db' # O script vai criar este DB se não existir
 }
 

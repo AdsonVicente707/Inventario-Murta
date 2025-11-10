@@ -35,7 +35,7 @@ app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-forte-e-dificil-de-adivinhar
 # **IMPORTANTE**: Substitua com suas credenciais do MySQL.
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root' # <-- COLOQUE SEU USUÁRIO REAL DO MYSQL AQUI
-app.config['MYSQL_PASSWORD'] = 'sua_senha_real' # <-- COLOQUE SUA SENHA REAL DO MYSQL AQUI
+app.config['MYSQL_PASSWORD'] = 'sua_senha_real' # <-- SUBSTITUA PELA SUA SENHA REAL DO MYSQL AQUI
 app.config['MYSQL_DB'] = 'inventory_db'
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor' # Retorna linhas como dicionários
 
